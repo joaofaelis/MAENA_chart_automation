@@ -25,6 +25,7 @@ def run_code():
     titulo_grafico = nome_do_escopo.replace('[', '').replace(']', '')
 
     df_evolucao_p_canal = SQLRepository.evolução_por_canal(escopo_tradicional, escopo_digital, data_inicio, data_fim)
+
     df_pie_timestamp = SQLRepository.repren_tipos_ocorrencia_timestamp_period(escopo, data_inicio, data_fim)
     order = {
         'CRÍTICA': 1,
@@ -38,29 +39,32 @@ def run_code():
     }
 
     points = [
-        {'fill': {'color': '#FFFF00'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': '#228B22'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': '#87CEFA'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': 'red'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': 'F4A460'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': '#FF00FF'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': '#008080'}, 'border': {'color': 'white', 'width': 2}},
-        {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2}}]
+        {'fill': {'color': '#FFFF00'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': '#228B22'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': '#87CEFA'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': 'red'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': 'F4A460'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': '#FF00FF'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': '#008080'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}},
+        {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}}]
 
     df_pie_timestamp['Order'] = df_pie_timestamp['Tipo_de_ocorrencia'].map(order)
     df_pie_timestam_one = df_pie_timestamp.sort_values(by='Order')
+    df_pie_timestam_one['Tipo_de_ocorrencia'] = df_pie_timestam_one['Tipo_de_ocorrencia'].str.capitalize()
     df_pie_timestamp_office = df_pie_timestam_one.drop(columns=['Order'])
 
     df_pie_first_period = SQLRepository.repren_tipos_ocorrencia_first_period(escopo, data_inicio)
 
     df_pie_first_period['Order'] = df_pie_first_period['Tipo_de_ocorrencia'].map(order)
     df_pie_time_first = df_pie_first_period.sort_values(by='Order')
+    df_pie_time_first['Tipo_de_ocorrencia'] =df_pie_time_first['Tipo_de_ocorrencia'].str.capitalize()
     df_pie_timestamp_first = df_pie_time_first.drop(columns=['Order'])
 
     df_pie_final_period = SQLRepository.repren_tipos_ocorrencia_final_period(escopo, data_fim)
 
     df_pie_final_period['Order'] = df_pie_final_period['Tipo_de_ocorrencia'].map(order)
     df_pie_time_final = df_pie_final_period.sort_values(by='Order')
+    df_pie_time_final['Tipo_de_ocorrencia'] = df_pie_time_final['Tipo_de_ocorrencia'].str.capitalize()
     df_pie_timestamp_final = df_pie_time_final.drop(columns=['Order'])
 
     df_pie_timestamp['Tipo_de_ocorrencia'] = df_pie_timestamp['Tipo_de_ocorrencia'].str.title()
@@ -86,7 +90,7 @@ def run_code():
     name_graph = f'Gráficos_p_Relátorio{data_inicio}.xlsx'
     file_path = os.path.join(desktop_path, name_graph)
     workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
-    chart_title_format = workbook.add_format({'bold': True, 'font_size': 14})
+
 
     for sheet_name, df in dataframe_original.items():
         worksheet = workbook.add_worksheet(sheet_name)
@@ -116,12 +120,11 @@ def run_code():
                     'line': {'color': cor, 'width': 1.0},
                     'marker': {'type': 'circle', 'border': {'color': cor}, 'fill': {'color': cor}},
                     'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12, 'color': cor}, 'position': 'above', 'align': 'left'}})
-
+            chart.set_x_axis({'num_font': {'name': 'Segoe UI', 'size': 12}})
             chart.set_title({
                 'name': f'{titulo_grafico} \nEvolução das manifestações por canal\n{soma_total_geral} manifestações - {data_inicio_formatada} a {data_fim_formatada}',
                 'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}})
             chart.set_y_axis({'major_gridlines': {'visible': False}, 'visible': False})
-            chart.set_x_axis({'name_font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}})
             chart.set_plotarea({'border': {'none': True}, 'fill': {'none': True}})
             chart.set_legend({'position': 'bottom',
                               'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'}})
@@ -135,7 +138,6 @@ def run_code():
             chart_sheet = workbook.add_chartsheet('Graf_manifestacao_p_ocorrencia')
             chart_sheet.set_tab_color('#32CD32')
             chart = workbook.add_chart({'type': 'pie'})
-
             chart.add_series({
                 'name': 'Ocorrências',
                 'categories': [sheet_name, 1, 0, df.shape[0], 0],
@@ -150,9 +152,13 @@ def run_code():
             chart.set_legend({
                 'position': 'left',  # Define a posição da legenda
                 'font': {'name': 'Segoe UI', 'size': 14, 'color': 'black'}})
-            altura_cm = 16.66
-            largura_cm = 26.77
-            chart.set_size({'width': largura_cm, 'height': altura_cm})  # Ajusta o tamanho do gráfico
+            width_in_cm = 10
+            height_in_cm = 7
+            width_in_pixels = width_in_cm * 37.8
+            height_in_pixels = height_in_cm * 37.8
+
+            chart.set_size({'width': width_in_pixels, 'height': height_in_pixels})
+
             chart_sheet.set_chart(chart)
 
         elif sheet_name == f'Manis_Tipo_Ocorrencia {data_inicio}':
