@@ -138,7 +138,7 @@ WHERE Escopo = ?
         return df
     @classmethod
     def get_total_manifestation_bd(cls, escopo: int, data_inicio: str, data_fim: str):
-        query = 'SELECT Escopo, ID, Tipo_de_ocorrencia, Grupo_de_tipo_de_ocorrencia, Ocorrencia, Mes, Total FROM CAMIL_MANIFESTACAO_CUBO WHERE ID = 1 AND Escopo = ? AND Mes >= ? AND Mes <= ?'
+        query = 'SELECT Escopo, ID, Tipo_de_ocorrencia, Grupo_de_tipo_de_ocorrencia, Ocorrencia, Mes, Total FROM CAMIL_MANIFESTACAO_CUBO WHERE ID = 1 AND Escopo = ? AND CONVERT(date, Mes) >= ? AND CONVERT(date, Mes) <= ?'
         params = (escopo, data_inicio, data_fim)
         infra = InfrastructureSQL()
         infra.connect()
