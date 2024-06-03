@@ -6,9 +6,9 @@ from datetime import datetime
 class SQLRepository:
 
     @classmethod
-    def get_escopo_name_bd(cls, _id: int):
+    def get_escopo_name_bd(cls, escopo: int):
         query = 'SELECT Nome_Escopo_Hierarquia FROM CAMIL_ESCOPO WHERE Escopo = ?'
-        params = (_id,)
+        params = (escopo,)
         infra = InfrastructureSQL()
         infra.connect()
 
