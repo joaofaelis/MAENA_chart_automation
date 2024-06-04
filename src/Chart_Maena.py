@@ -30,7 +30,6 @@ def run_code():
     df_evolucao_p_canal['Mes_ano'] = df_evolucao_p_canal['Mes_ano'].dt.strftime('%b/%y').str.capitalize()
 
 
-
     df_pie_timestamp = SQLRepository.repren_tipos_ocorrencia_timestamp_period(escopo, data_inicio, data_fim)
     order = {
         'CRÍTICA': 1,
@@ -205,11 +204,9 @@ def run_code():
             chart_sheet.set_chart(chart)
 
         elif sheet_name == f'Manis_Tipo_Ocorrencia {data_fim}':
-            num_rows = df.shape[0]
             chart_sheet = workbook.add_chartsheet(f'Graf_Ocorrencia {data_fim}')
             chart_sheet.set_tab_color('#32CD32')
             chart = workbook.add_chart({'type': 'pie'})
-            categorias = df['Tipo_de_ocorrencia'].tolist()
             chart.add_series({
                 'name': 'Ocorrências',
                 'categories': [sheet_name, 1, 0, df.shape[0], 0],
@@ -225,9 +222,6 @@ def run_code():
             chart.set_legend({
                 'position': 'left',  # Define a posição da legenda
                 'font': {'name': 'Segoe UI', 'size': 14, 'color': 'black'}})
-            altura_cm = 16.66
-            largura_cm = 26.77
-            chart.set_size({'width': largura_cm, 'height': altura_cm})
             chart_sheet.set_chart(chart)
 
     workbook.close()
@@ -239,13 +233,11 @@ root = tk.Tk()
 root.title("Gerador de Gráficos Maena")
 root.geometry("400x300")
 
-
 # Criando os widgets
 label_escopo = tk.Label(root, text="Informe o número do escopo desejado:")
 label_escopo.pack()
 entry_escopo = tk.Entry(root)
 entry_escopo.pack()
-
 
 label_escopo_tradicional = tk.Label(root, text="Informe o Número do escopo referente ao canal TRADICIONAL:")
 label_escopo_tradicional.pack()
@@ -269,8 +261,6 @@ entry_data_fim.pack()
 
 button_executar = tk.Button(root, text="Gerar Gráficos", command=run_code, bg="#FF69B4")
 button_executar.pack(side='bottom', pady=10)
-
-
 
 # Iniciar o loop principal da aplicação
 root.mainloop()
