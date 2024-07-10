@@ -7,7 +7,7 @@ class SQLRepository:
 
     @classmethod
     def get_escopo_name_bd(cls, escopo: int):
-        query = 'SELECT Nome_Escopo_Hierarquia FROM CAMIL_ESCOPO WHERE Escopo = ?'
+        query = 'SELECT Nome_Escopo FROM CAMIL_ESCOPO WHERE Escopo = ?'
         params = (escopo,)
         infra = InfrastructureSQL()
         infra.connect()
@@ -90,44 +90,49 @@ class SQLRepository:
         data_inicio_1 = data_inicio.replace(day=1)
         data_fim_1 = data_fim.replace(day=1)
 
-        query = '''
-      SELECT 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia
-    END AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total 
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ? AND ID != 1
-   AND CONVERT(date, Mes) >= ?
-    AND CONVERT(date, Mes) <= ?
-    AND (
-        (ID = 290 AND Grupo_de_tipo_de_ocorrencia != 'COMENTÁRIOS E MENÇÕES') 
-        OR 
-        (ID != 290 AND Tipo_de_ocorrencia != 'REDES SOCIAIS')
-    )
-GROUP BY 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia 
-    END
+        query = f'''
+            SELECT Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+            INTO #TotalOcorrencias
+            FROM Escopo_{_escopo} 
+            WHERE CONVERT(date, Mes_ano) BETWEEN '{data_inicio_1}' AND '{data_fim_1}'
+            GROUP BY Tipo_de_Ocorrencia;
 
-UNION ALL 
+            DELETE FROM #TotalOcorrencias WHERE Tipo_de_Ocorrencia = 'Redes Sociais';
 
-SELECT 
-    'COMENTÁRIOS E MENÇÕES' AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ?
-    AND ID = 292 
-    AND CONVERT(date, Mes) >= ? 
-    AND CONVERT(date, Mes) <= ?;
+            -- Contar ocorrências específicas de Comentários e Menções dentro de Redes Sociais
+            SELECT 'COMENTÁRIOS E MENÇÕES' AS Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+            INTO #ComentariosMencoes
+            FROM Escopo_{_escopo} 
+            WHERE CONVERT(date, Mes_ano) BETWEEN '{data_inicio_1}' AND '{data_fim_1}'
+            AND Tipo_de_Ocorrencia = 'Redes Sociais'
+            AND Grupo_de_tipo_de_ocorrencia IN ('Comentários e Menções')
+            GROUP BY Tipo_de_Ocorrencia;
 
+            -- Contar Redes Sociais excluindo Comentários e Menções
+            SELECT 'OUTRAS INTERAÇÕES' AS Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+            INTO #OutrasInteracoes
+            FROM Escopo_{_escopo} 
+            WHERE CONVERT(date, Mes_ano) BETWEEN '{data_inicio_1}' AND '{data_fim_1}'
+            AND Tipo_de_Ocorrencia = 'Redes Sociais'
+            AND Grupo_de_tipo_de_ocorrencia NOT IN ('Comentários e Menções')
+            GROUP BY Tipo_de_Ocorrencia;'''
+
+        query_1 = f'''
+            SELECT * FROM #TotalOcorrencias
+            UNION ALL
+            SELECT * FROM #ComentariosMencoes
+            UNION ALL
+            SELECT * FROM #OutrasInteracoes;
+
+            -- Limpar tabelas temporárias
+            DROP TABLE #TotalOcorrencias;
+            DROP TABLE #ComentariosMencoes;
+            DROP TABLE #OutrasInteracoes;
         '''
 
-        database_cursor.execute(query, (_escopo, data_inicio_1, data_fim_1, _escopo, data_inicio_1, data_fim_1))
+        database_cursor.execute(query)
+        database_cursor.execute(query_1)
         results = database_cursor.fetchall()
-
         df_data = [(row[0], row[1]) for row in results]
         df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
 
@@ -152,55 +157,6 @@ WHERE Escopo = ?
 
         return df
     @classmethod
-    def repren_tipos_ocorrencia_first_period(cls, _escopo: int, data_inicio: str):
-        infra_sql = InfrastructureSQL()
-        infra_sql.connect()
-        database_cursor = infra_sql.conn.cursor()
-
-        data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
-        data_inicio = data_inicio.replace(day=1)
-
-        query = '''
-           SELECT 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia
-    END AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total 
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ? AND ID != 1
-   AND CONVERT(date, Mes) = ?
-    AND (
-        (ID = 290 AND Grupo_de_tipo_de_ocorrencia != 'COMENTÁRIOS E MENÇÕES') 
-        OR 
-        (ID != 290 AND Tipo_de_ocorrencia != 'REDES SOCIAIS')
-    )
-GROUP BY 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia 
-    END
-
-UNION ALL 
-
-SELECT 
-    'COMENTÁRIOS E MENÇÕES' AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ?
-    AND ID = 292 
-    AND CONVERT(date, Mes) = ?;'''
-
-        database_cursor.execute(query, (_escopo, data_inicio, _escopo, data_inicio))
-        results = database_cursor.fetchall()
-
-        df_data = [(row[0], row[1]) for row in results]
-        df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
-
-        infra_sql.close_connection()
-
-        return df
-    @classmethod
     def repren_tipos_ocorrencia_final_period(cls, _escopo: int, data_fim: str):
         infra_sql = InfrastructureSQL()
         infra_sql.connect()
@@ -209,42 +165,49 @@ WHERE Escopo = ?
         data_fim = datetime.strptime(data_fim, '%Y-%m').date()
         data_fim = data_fim.replace(day=1)
 
-        query = '''
-         SELECT 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia
-    END AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total 
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ? AND ID != 1
-   AND CONVERT(date, Mes) = ?
-    AND (
-        (ID = 290 AND Grupo_de_tipo_de_ocorrencia != 'COMENTÁRIOS E MENÇÕES') 
-        OR 
-        (ID != 290 AND Tipo_de_ocorrencia != 'REDES SOCIAIS')
-    )
-GROUP BY 
-    CASE 
-        WHEN ID = 290 THEN 'OUTRAS INTERAÇÕES' 
-        ELSE Tipo_de_ocorrencia 
-    END
+        query = f'''
+                    SELECT Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+                    INTO #TotalOcorrencias
+                    FROM Escopo_{_escopo} 
+                    WHERE CONVERT(date, Mes_ano) ='{data_fim}'
+                    GROUP BY Tipo_de_Ocorrencia;
 
-UNION ALL 
+                    DELETE FROM #TotalOcorrencias WHERE Tipo_de_Ocorrencia = 'Redes Sociais';
 
-SELECT 
-    'COMENTÁRIOS E MENÇÕES' AS Tipo_de_ocorrencia, 
-    SUM(Total) AS Total
-FROM CAMIL_MANIFESTACAO_CUBO 
-WHERE Escopo = ?
-    AND ID = 292 
-    AND CONVERT(date, Mes) = ?;
+                    -- Contar ocorrências específicas de Comentários e Menções dentro de Redes Sociais
+                    SELECT 'COMENTÁRIOS E MENÇÕES' AS Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+                    INTO #ComentariosMencoes
+                    FROM Escopo_{_escopo} 
+                    WHERE CONVERT(date, Mes_ano) = '{data_fim}'
+                    AND Tipo_de_Ocorrencia = 'Redes Sociais'
+                    AND Grupo_de_tipo_de_ocorrencia IN ('Comentários e Menções')
+                    GROUP BY Tipo_de_Ocorrencia;
 
-          '''
+                    -- Contar Redes Sociais excluindo Comentários e Menções
+                    SELECT 'OUTRAS INTERAÇÕES' AS Tipo_de_Ocorrencia, COUNT(*) AS Quantidade 
+                    INTO #OutrasInteracoes
+                    FROM Escopo_{_escopo} 
+                    WHERE CONVERT(date, Mes_ano) = '{data_fim}'
+                    AND Tipo_de_Ocorrencia = 'Redes Sociais'
+                    AND Grupo_de_tipo_de_ocorrencia NOT IN ('Comentários e Menções')
+                    GROUP BY Tipo_de_Ocorrencia;'''
 
-        database_cursor.execute(query, (_escopo, data_fim, _escopo, data_fim))
+        query_1 = f'''
+                    SELECT * FROM #TotalOcorrencias
+                    UNION ALL
+                    SELECT * FROM #ComentariosMencoes
+                    UNION ALL
+                    SELECT * FROM #OutrasInteracoes;
+
+                    -- Limpar tabelas temporárias
+                    DROP TABLE #TotalOcorrencias;
+                    DROP TABLE #ComentariosMencoes;
+                    DROP TABLE #OutrasInteracoes;
+                '''
+
+        database_cursor.execute(query)
+        database_cursor.execute(query_1)
         results = database_cursor.fetchall()
-
         df_data = [(row[0], row[1]) for row in results]
         df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
 
@@ -332,7 +295,7 @@ WHERE Escopo = ?
                     COUNT(*) AS Quantidade
                 FROM CAMIL.dbo.Escopo_{}
                 WHERE Tipo_de_ocorrencia = 'Reclamação'
-                  AND CONVERT(date, Mes_ano) BETWEEN ? AND ? 
+                  AND CONVERT(date, Mes_ano) = ?
                 GROUP BY 
                     CASE 
                         WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
@@ -499,67 +462,131 @@ ORDER BY sort_order, quantidade DESC;
         data_fim = datetime.strptime(data_fim, '%Y-%m').date()
         data_fim = data_fim.replace(day=1)
 
-        query = '''SELECT 
-    COALESCE(SubCategoria_nivel1, 'Pescados em geral') AS SubCategoria,
-    COALESCE(Marca_MAENA, 'Não identificada') AS Marca,
-    COUNT(*) AS Total_Manifestacoes
-FROM 
-    Escopo_{}
-WHERE 
-    CONVERT(date, Mes_ano) BETWEEN ? AND ? -- ajuste este período conforme necessário
-GROUP BY 
-    COALESCE(SubCategoria_nivel1, 'Pescados em geral'), 
-    COALESCE(Marca_MAENA, 'Não identificada')
-ORDER BY 
-    SubCategoria,
-    Marca;
-'''.format(escopo)
+        query = f"""
+                           DECLARE @cols AS NVARCHAR(MAX),
+                           @query AS NVARCHAR(MAX);
 
-        database_cursor.execute(query, (data_inicio, data_fim))
+                           -- Obter a lista de marcas distintas, substituindo "EM GERAL" por "Não identificada"
+                           SELECT @cols = STRING_AGG(QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
+                           WITHIN GROUP (ORDER BY CASE WHEN Marca_MAENA = 'EM GERAL' THEN 1 ELSE 0 END)
+                           FROM (SELECT DISTINCT Marca_MAENA
+                                 FROM Escopo_{escopo}
+                                 WHERE Marca_MAENA IS NOT NULL) AS tmp;
+
+                           -- Construir a consulta dinâmica PIVOT
+                           SET @query = '
+                           SELECT SubCategoria, ' + @cols + ' 
+                           FROM (
+                               SELECT 
+                                   COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
+                                   CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END AS Marca,
+                                   COUNT(*) AS Total_Manifestacoes
+                               FROM 
+                                   Escopo_{escopo}
+                               WHERE 
+                                   CONVERT(date, Mes_ano) BETWEEN ''{data_inicio}'' AND ''{data_fim}''
+                               GROUP BY 
+                                   COALESCE(SubCategoria_nivel1, ''geral''),
+                                   CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END
+                           ) AS SourceTable
+                           PIVOT (
+                               SUM(Total_Manifestacoes)
+                               FOR Marca IN (' + @cols + ')
+                           ) AS PivotTable';
+
+                           -- Adicionar a substituição de NULL por 0 na seleção final
+                          SET @query = 'SELECT SubCategoria, ' + 
+                     (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END) + ', 0) AS ' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
+                      FROM (SELECT DISTINCT Marca_MAENA
+                            FROM Escopo_{escopo}
+                            WHERE Marca_MAENA IS NOT NULL) AS tmp)
+                     + ' FROM (' + @query + ') AS FinalResult ORDER BY SubCategoria ASC';
+
+                           -- Executar a consulta dinâmica
+                           EXEC sp_executesql @query;
+                       """
+
+        database_cursor.execute(query)
         results = database_cursor.fetchall()
 
-        df_data = [(row[0], row[1], row[2]) for row in results]
-        df = pd.DataFrame(df_data, columns=['Categoria', 'Marca', 'Total'])
+        if not results:
+            return pd.DataFrame()  # Retorna um DataFrame vazio se não houver resultados
 
-        infra_sql.close_connection()
+        # Obter os nomes das colunas do cursor
+        columns = [column[0] for column in database_cursor.description]
+
+        # Converter os resultados para uma lista de tuplas
+        data = [tuple(row) for row in results]
+
+        df = pd.DataFrame(data, columns=columns)
 
         return df
-
 
     @classmethod
     def total_per_category_period(cls, escopo, data_fim):
         infra_sql = InfrastructureSQL()
         infra_sql.connect()
         database_cursor = infra_sql.cursor_db()
+
         data_fim = datetime.strptime(data_fim, '%Y-%m').date()
         data_fim = data_fim.replace(day=1)
 
-        query = '''SELECT 
-    COALESCE(SubCategoria_nivel1, 'Pescados em geral') AS SubCategoria,
-    COALESCE(Marca_MAENA, 'Não identificada') AS Marca,
-    COUNT(*) AS Total_Manifestacoes
-FROM 
-    Escopo_{}
-WHERE 
-    CONVERT(date, Mes_ano) = ?
-GROUP BY 
-    COALESCE(SubCategoria_nivel1, 'Pescados em geral'), 
-    COALESCE(Marca_MAENA, 'Não identificada')
-ORDER BY 
-    SubCategoria,
-    Marca;
-'''.format(escopo)
+        query = f"""
+                   DECLARE @cols AS NVARCHAR(MAX),
+                   @query AS NVARCHAR(MAX);
 
-        database_cursor.execute(query, (data_fim))
+                   -- Obter a lista de marcas distintas, substituindo "EM GERAL" por "Não identificada"
+                   SELECT @cols = STRING_AGG(QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
+                   WITHIN GROUP (ORDER BY CASE WHEN Marca_MAENA = 'EM GERAL' THEN 1 ELSE 0 END)
+                   FROM (SELECT DISTINCT Marca_MAENA
+                         FROM Escopo_{escopo}
+                         WHERE Marca_MAENA IS NOT NULL) AS tmp;
+
+                   -- Construir a consulta dinâmica PIVOT
+                   SET @query = '
+                   SELECT SubCategoria, ' + @cols + ' 
+                   FROM (
+                       SELECT 
+                           COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
+                           CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END AS Marca,
+                           COUNT(*) AS Total_Manifestacoes
+                       FROM 
+                           Escopo_{escopo}
+                       WHERE 
+                           CONVERT(date, Mes_ano) = ''{data_fim}''
+                       GROUP BY 
+                           COALESCE(SubCategoria_nivel1, ''geral''),
+                           CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END
+                   ) AS SourceTable
+                   PIVOT (
+                       SUM(Total_Manifestacoes)
+                       FOR Marca IN (' + @cols + ')
+                   ) AS PivotTable';
+
+                   -- Adicionar a substituição de NULL por 0 na seleção final
+                  SET @query = 'SELECT SubCategoria, ' + 
+             (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END) + ', 0) AS ' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
+              FROM (SELECT DISTINCT Marca_MAENA
+                    FROM Escopo_{escopo}
+                    WHERE Marca_MAENA IS NOT NULL) AS tmp)
+             + ' FROM (' + @query + ') AS FinalResult ORDER BY SubCategoria ASC';
+
+                   -- Executar a consulta dinâmica
+                   EXEC sp_executesql @query;
+               """
+
+        database_cursor.execute(query)
         results = database_cursor.fetchall()
 
-        df_data = [(row[0], row[1], row[2]) for row in results]
-        df = pd.DataFrame(df_data, columns=['Categoria', 'Marca', 'Total'])
+        if not results:
+            return pd.DataFrame()  # Retorna um DataFrame vazio se não houver resultados
 
-        infra_sql.close_connection()
+        # Obter os nomes das colunas do cursor
+        columns = [column[0] for column in database_cursor.description]
+
+        # Converter os resultados para uma lista de tuplas
+        data = [tuple(row) for row in results]
+
+        df = pd.DataFrame(data, columns=columns)
 
         return df
-
-
-
-

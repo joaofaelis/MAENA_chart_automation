@@ -22,8 +22,9 @@ def run_code():
     data_fim_formatada = data_fim_format.strftime("%b/%Y").capitalize()
 
     escopo_name = SQLRepository.get_escopo_name_bd(escopo)
-    nome_do_escopo = escopo_name['Nome_Escopo_Hierarquia'].to_string(index=False)
+    nome_do_escopo = escopo_name['Nome_Escopo'].to_string(index=False)
     titulo_grafico = nome_do_escopo.replace('[', '').replace(']', '')
+    titulo_grafico = titulo_grafico.title()
 
     df_evolucao_p_canal = SQLRepository.evolução_por_canal(escopo_tradicional, escopo_digital, data_inicio, data_fim)
     df_evolucao_p_canal['Mes_ano'] = pd.to_datetime(df_evolucao_p_canal['Mes_ano'], format='%Y-%m')
@@ -31,6 +32,7 @@ def run_code():
 
 
     df_pie_timestamp = SQLRepository.repren_tipos_ocorrencia_timestamp_period(escopo, data_inicio, data_fim)
+
     order = {
         'CRÍTICA': 1,
         'ELOGIO': 2,
@@ -53,33 +55,103 @@ def run_code():
         {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2, 'height': 0.5}}]
 
     df_pie_timestamp['Order'] = df_pie_timestamp['Tipo_de_ocorrencia'].map(order)
-    df_pie_timestam_one = df_pie_timestamp.sort_values(by='Order')
-    df_pie_timestam_one['Tipo_de_ocorrencia'] = df_pie_timestam_one['Tipo_de_ocorrencia'].str.capitalize()
-    df_pie_timestamp_office = df_pie_timestam_one.drop(columns=['Order'])
+    df_pie_timestamp = df_pie_timestamp.sort_values(by='Order')
+    df_pie_timestamp['Tipo_de_ocorrencia'] = df_pie_timestamp['Tipo_de_ocorrencia'].str.capitalize()
 
-    df_pie_first_period = SQLRepository.repren_tipos_ocorrencia_first_period(escopo, data_inicio)
 
-    df_pie_first_period['Order'] = df_pie_first_period['Tipo_de_ocorrencia'].map(order)
-    df_pie_time_first = df_pie_first_period.sort_values(by='Order')
-    df_pie_time_first['Tipo_de_ocorrencia'] =df_pie_time_first['Tipo_de_ocorrencia'].str.capitalize()
-    df_pie_timestamp_first = df_pie_time_first.drop(columns=['Order'])
 
     df_pie_final_period = SQLRepository.repren_tipos_ocorrencia_final_period(escopo, data_fim)
-
     df_pie_final_period['Order'] = df_pie_final_period['Tipo_de_ocorrencia'].map(order)
-    df_pie_time_final = df_pie_final_period.sort_values(by='Order')
-    df_pie_time_final['Tipo_de_ocorrencia'] = df_pie_time_final['Tipo_de_ocorrencia'].str.capitalize()
-    df_pie_timestamp_final = df_pie_time_final.drop(columns=['Order'])
+    df_pie_final_period = df_pie_final_period.sort_values(by='Order')
+    categorias_esperadas = ['CRÍTICA', 'ELOGIO', 'INFORMAÇÃO', 'RECLAMAÇÃO', 'SOLICITAÇÃO', 'SUGESTÃO',
+                            'COMENTÁRIOS E MENÇÕES', 'OUTRAS INTERAÇÕES']
+
+    categorias_presentes = df_pie_final_period['Tipo_de_ocorrencia'].unique()
+    novos_points = []
+    for i, categoria in enumerate(categorias_esperadas):
+        if categoria in categorias_presentes:
+            novos_points.append(points[i])
+
+
 
     df_pie_timestamp['Tipo_de_ocorrencia'] = df_pie_timestamp['Tipo_de_ocorrencia'].str.title()
-    df_pie_first_period['Tipo_de_ocorrencia'] = df_pie_first_period['Tipo_de_ocorrencia'].str.title()
+
     df_pie_final_period['Tipo_de_ocorrencia'] = df_pie_final_period['Tipo_de_ocorrencia'].str.title()
 
     total_manifestações = SQLRepository.get_total_manifestation_bd(escopo, data_inicio_format, data_fim_format)
     soma_total_geral = int(total_manifestações['Total'].sum())
     sum_period_data = int(df_pie_timestamp['Total'].sum())
-    sum_first_data = int(df_pie_first_period['Total'].sum())
     sum_final_data = int(df_pie_final_period['Total'].sum())
+
+
+    df_acumulate_line = SQLRepository.chart_columns_line_reclamacao(escopo, data_inicio, data_fim)
+    df_acumulate_line['Tipo_de_ocorrencia'] = df_acumulate_line['Tipo_de_ocorrencia'].str.title()
+    total_reclamacoes_acumulate = df_acumulate_line['Total'].sum()
+    df_acumulate_line = df_acumulate_line.sort_values(by='Total', ascending=False)
+    volume_menor = df_acumulate_line[
+    df_acumulate_line['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto_acumulate = df_acumulate_line[
+    df_acumulate_line['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    df_acumulate_line = pd.concat([resto_acumulate, volume_menor])
+    df_acumulate_line['% Acumulado'] = df_acumulate_line['Total'] / total_reclamacoes_acumulate
+    df_acumulate_line['% Acumulado'] = df_acumulate_line['% Acumulado'].cumsum()
+
+
+
+
+
+    df_acumulate_line_date_final = SQLRepository.chart_columns_line_reclamacao_last_date(escopo, data_fim)
+    df_acumulate_line_date_final['Tipo_de_ocorrencia'] = df_acumulate_line_date_final['Tipo_de_ocorrencia'].str.title()
+    total_acumulate_final_date = df_acumulate_line_date_final['Total'].sum()
+    df_acumulate_line_date_final = df_acumulate_line_date_final.sort_values(by='Total', ascending=False)
+    volume_menor_final = df_acumulate_line_date_final[df_acumulate_line_date_final['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto_acumulate_final = df_acumulate_line_date_final[df_acumulate_line_date_final['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    df_acumulate_line_date_final = pd.concat([resto_acumulate_final, volume_menor_final])
+    df_acumulate_line_date_final['% Acumulado'] = df_acumulate_line_date_final['Total'] / total_acumulate_final_date
+    df_acumulate_line_date_final['% Acumulado'] = df_acumulate_line_date_final['% Acumulado'].cumsum()
+
+
+
+    df_except_reclamacao = SQLRepository.chart_columns_line_except_reclamacao(escopo, data_inicio, data_fim)
+    df_except_reclamacao['Tipo_de_ocorrencia'] = df_except_reclamacao['Tipo_de_ocorrencia'].str.title()
+    total_except_reclamacao = df_except_reclamacao['Total'].sum()
+    # Ordenar o DataFrame pela coluna 'Total' em ordem decrescente
+    df_except_reclamacao = df_except_reclamacao.sort_values(by='Total', ascending=False)
+    # Separar a categoria "Manifestações Em Menor Volume"
+    menor_volume = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    # Concatenar as partes, garantindo que "Manifestações Em Menor Volume" fique no final
+    df_except_reclamacao = pd.concat([resto, menor_volume])
+    # Calcular a coluna '% Acumulado'
+    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['Total'] / total_except_reclamacao
+    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['% Acumulado'].cumsum()
+
+
+    df_except_reclamacao_last_date = SQLRepository.chart_columns_line_except_reclamacao_last_date(escopo, data_fim)
+    df_except_reclamacao_last_date['Tipo_de_ocorrencia'] = df_except_reclamacao['Tipo_de_ocorrencia'].str.title()
+    total_except_reclamacao_last_date = df_except_reclamacao_last_date['Total'].sum()
+    df_except_reclamacao_last_date = df_except_reclamacao_last_date.sort_values(by='Total', ascending=False)
+    menor_volume_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    df_except_reclamacao_last_date = pd.concat([resto_last_date, menor_volume_last_date])
+    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['Total'] / total_except_reclamacao_last_date
+    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['% Acumulado'].cumsum()
+
+
+
+
+    df_per_categoria = SQLRepository.total_per_category(escopo, data_inicio, data_fim)
+    df_per_categoria['SubCategoria'] = df_per_categoria['SubCategoria'].str.title()
+    df_per_categoria = df_per_categoria.sort_values(by=df_per_categoria.columns[1], ascending=False)
+    df_per_categoria = df_per_categoria.fillna(0)
+
+
+    df_per_categoria_final_date = SQLRepository.total_per_category_period(escopo,data_fim)
+    df_per_categoria_final_date = df_per_categoria_final_date.sort_values(by=df_per_categoria_final_date.columns[1], ascending=False)
+    df_per_categoria_final_date['SubCategoria'] = df_per_categoria_final_date['SubCategoria'].str.title()
+    df_per_categoria_final_date = df_per_categoria_final_date.fillna(0)
+
+
 
     desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
     if not os.path.exists(desktop_path):  # Caso o usuário não esteja no Windows
@@ -95,9 +167,14 @@ def run_code():
 
     with pd.ExcelWriter(output_file_path) as writer:
         df_evolucao_p_canal.to_excel(writer, sheet_name=f'Manifestação_p_Canal {data_inicio}', index=False)
-        df_pie_timestamp_office.to_excel(writer, sheet_name='Manis_Tipo_Ocorrencia', index=False)
-        df_pie_timestamp_first.to_excel(writer, sheet_name=f'Manis_Tipo_Ocorrencia {data_inicio}', index=False)
-        df_pie_timestamp_final.to_excel(writer, sheet_name=f'Manis_Tipo_Ocorrencia {data_fim}', index=False)
+        df_pie_timestamp.to_excel(writer, sheet_name='Manis_Tipo_Ocorrencia', index=False)
+        df_pie_final_period.to_excel(writer, sheet_name=f'Manis_Tipo_Ocorrencia {data_fim}', index=False)
+        df_acumulate_line.to_excel(writer, sheet_name='% acumulado', index=False)
+        df_acumulate_line_date_final.to_excel(writer, sheet_name=f'% Acumulado {data_fim}', index=False)
+        df_except_reclamacao.to_excel(writer, sheet_name='Exceto reclamacao', index=False)
+        df_except_reclamacao_last_date.to_excel(writer, sheet_name=f'Exceto reclamacao {data_fim}', index=False)
+        df_per_categoria.to_excel(writer, sheet_name='Por Categoria', index=False)
+        df_per_categoria_final_date.to_excel(writer, sheet_name=f'Por Categoria {data_fim}', index=False)
 
     dataframe_original = pd.read_excel(output_file_path, sheet_name=None)
     workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
@@ -119,7 +196,7 @@ def run_code():
                                df.columns[2]: f'Digitais = {soma_digital}'}, inplace=True)
             date_format = workbook.add_format({'num_format': 'mmm/yyyy'})
             worksheet.set_column('A:A', None, date_format)
-            chart_sheet = workbook.add_chartsheet('Graf_Evolucao_canal')
+            chart_sheet = workbook.add_chartsheet('GRAPH01')
             chart_sheet.set_tab_color('#32CD32')
             chart = workbook.add_chart({'type': 'line'})
 
@@ -148,7 +225,7 @@ def run_code():
             chart_sheet.set_chart(chart)
 
         elif sheet_name == 'Manis_Tipo_Ocorrencia':
-            chart_sheet = workbook.add_chartsheet('Graf_manifestacao_p_ocorrencia')
+            chart_sheet = workbook.add_chartsheet('GRAPH02')
             chart_sheet.set_tab_color('#32CD32')
             chart = workbook.add_chart({'type': 'pie'})
             chart.add_series({
@@ -165,46 +242,11 @@ def run_code():
             chart.set_legend({
                 'position': 'left',  # Define a posição da legenda
                 'font': {'name': 'Segoe UI', 'size': 14, 'color': 'black'}})
-            width_in_cm = 10
-            height_in_cm = 7
-            width_in_pixels = width_in_cm * 37.8
-            height_in_pixels = height_in_cm * 37.8
 
-            chart.set_size({'width': width_in_pixels, 'height': height_in_pixels})
-
-            chart_sheet.set_chart(chart)
-
-        elif sheet_name == f'Manis_Tipo_Ocorrencia {data_inicio}':
-            num_rows = df.shape[0]
-            chart_sheet = workbook.add_chartsheet(f'Graf_Ocorrencia {data_inicio}')
-
-            chart_sheet.set_tab_color('#32CD32')
-            chart = workbook.add_chart({'type': 'pie'})
-            altura_cm = 5
-            largura_cm = 5
-            largura_pontos = largura_cm * 28.3464567
-            altura_pontos = altura_cm * 28.3464567
-
-            # Definir tamanho do gráfico
-            chart.set_size({'width': largura_pontos, 'height': altura_pontos})
-            chart.add_series({
-                'name': 'Ocorrências',
-                'categories': [sheet_name, 1, 0, df.shape[0], 0],
-                'values': [sheet_name, 1, 1, df.shape[0], 1],
-                'data_labels': {'percentage': True, 'position': 'outside_end', 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
-                'points': points})
-            # Definir título do gráfico
-            chart.set_title({
-                'name': f'{titulo_grafico} \nRepresentatividade de tipos de ocorrência\n{sum_first_data} manifestações - {data_inicio_formatada}',
-                'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'},
-                'overlay': True})
-            chart.set_legend({
-                'position': 'left',  # Define a posição da legenda
-                'font': {'name': 'Segoe UI', 'size': 14, 'color': 'black'}})
             chart_sheet.set_chart(chart)
 
         elif sheet_name == f'Manis_Tipo_Ocorrencia {data_fim}':
-            chart_sheet = workbook.add_chartsheet(f'Graf_Ocorrencia {data_fim}')
+            chart_sheet = workbook.add_chartsheet('GRAPH03')
             chart_sheet.set_tab_color('#32CD32')
             chart = workbook.add_chart({'type': 'pie'})
             chart.add_series({
@@ -212,7 +254,7 @@ def run_code():
                 'categories': [sheet_name, 1, 0, df.shape[0], 0],
                 'values': [sheet_name, 1, 1, df.shape[0], 1],
                 'data_labels': {'percentage': True, 'position': 'outside_end', 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
-                'points': points})
+                'points': novos_points})
             # Definir título do gráfico
             chart.set_title({
                 'name': f'{titulo_grafico} \nRepresentatividade de tipos de ocorrência\n{sum_final_data} manifestações - {data_fim_formatada}',
@@ -223,6 +265,328 @@ def run_code():
                 'position': 'left',  # Define a posição da legenda
                 'font': {'name': 'Segoe UI', 'size': 14, 'color': 'black'}})
             chart_sheet.set_chart(chart)
+
+        elif sheet_name == '% acumulado':
+            chart_sheet = workbook.add_chartsheet('GRAPH04')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            chart.add_series({
+                'name': 'Reclamações',
+                'categories': [sheet_name, 1, 0, df.shape[0], 0],
+                'values': [sheet_name, 1, 1, df.shape[0], 1],
+                'fill': {'color': '#FF0000'},
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12}},
+                'gap': 50
+            })
+            chart_sheet.set_chart(chart)
+            chart.set_title(
+                {'name': f'{titulo_grafico} \n10 principais motivos de reclamações \n{total_reclamacoes_acumulate} reclamações - {data_inicio_formatada} a {data_fim_formatada}',
+                 'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}})
+            chart.set_legend({'position': 'bottom', 'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'}})
+            chart.set_x_axis({'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -66}, 'major_gridlines': {'visible': False},
+                              'line': {'none': True}})
+            chart.set_y_axis({
+                'min': 0,
+                'max': total_reclamacoes_acumulate,
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+                'num_font': {'color': 'white'},
+                'line': {'none': True}
+            })
+
+            line_chart = workbook.add_chart({'type': 'line'})
+            line_chart.add_series({
+                'name': '% Acumulado',
+                'categories': [sheet_name, 1, 0, df_acumulate_line.shape[0], 0],
+                'values': [sheet_name, 1, 2, df_acumulate_line.shape[0], 2],
+                'line': {'color': 'black', 'width': 1.0},
+                'y2_axis': True,
+            })
+            line_chart.set_y2_axis({
+                'line': {'none': True},
+                'major_gridlines': {'visible': False},
+                'minor_gridlines': {'visible': False},
+                'num_format': '0%',
+                'max': 1,
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'}
+            })
+            # Combinar os gráficos de colunas e linha
+            chart.combine(line_chart)
+
+        elif sheet_name == f'% Acumulado {data_fim}':
+            chart_sheet = workbook.add_chartsheet('GRAPH05')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            chart.add_series({
+                'name': 'Reclamações',
+                'categories': [sheet_name, 1, 0, df.shape[0], 0],
+                'values': [sheet_name, 1, 1, df.shape[0], 1],
+                'fill': {'color': '#FF0000'},
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
+                'gap': 50
+            })
+            chart_sheet.set_chart(chart)
+            chart.set_title(
+                {'name': f'{titulo_grafico} \n10 principais motivos de reclamações \n{total_acumulate_final_date} reclamações - {data_fim_formatada}',
+                    'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}})
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False,
+                                       'color': 'black'}})
+            chart.set_x_axis(
+                {'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -66}, 'major_gridlines': {'visible': False},
+                 'line': {'none': True}})
+
+
+            chart.set_y_axis({
+                'min': 0,
+                'max': total_acumulate_final_date,
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+                'num_font': {'color': 'white'},
+                'line': {'none': True}
+            })
+
+            line_chart = workbook.add_chart({'type': 'line'})
+            line_chart.add_series({
+                'name': '% Acumulado',
+                'categories': [sheet_name, 1, 0, df_acumulate_line_date_final.shape[0], 0],
+                'values': [sheet_name, 1, 2, df_acumulate_line_date_final.shape[0], 2],
+                'line': {'color': 'black', 'width': 1.0},
+                'y2_axis': True,
+            })
+            line_chart.set_y2_axis({
+                'major_gridlines': {'visible': False},
+                'minor_gridlines': {'visible': False},
+                'num_format': '0%',
+                'max': 1,
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'},
+                'line': {'none': True}
+            })
+            # Combinar os gráficos de colunas e linha
+            chart.combine(line_chart)
+        elif sheet_name == 'Exceto reclamacao':
+            chart_sheet = workbook.add_chartsheet('GRAPH06')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+
+            # Definindo cores para as categorias antes do hífen
+            cores = {
+                'Redes Sociais': '#008080',
+                'Elogio': '#32CD32',
+                'Solicitação': '#F4A460',
+                'Informação': '#6495ED',
+                'Manifestações Em Menor Volume': '#4F4F4F',
+                'Crítica': '#FFD700',
+                'Sugestão': '#FF00FF'
+            }
+
+            categorias = df.iloc[:, 0].tolist()  # Lista de todas as categorias completas
+            valores = df.iloc[:, 1].tolist()  # Lista de todos os valores correspondentes
+
+            # Criando lista de cores para cada ponto
+            cores_pontos = []
+            for categoria_completa in categorias:
+                categoria = categoria_completa.split(' - ')[0]
+                cor = cores.get(categoria, '#4F4F4F')  # Define a cor com base na categoria
+                cores_pontos.append({'fill': {'color': cor}})
+
+            # Adicionar a série com valores e cores
+            chart.add_series({
+                'name': 'Manifestações',
+                'categories': [sheet_name, 1, 0, len(categorias), 0],
+                'values': [sheet_name, 1, 1, len(categorias), 1],
+                'points': cores_pontos,
+                'fill': {'color': '#4F4F4F'},
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
+                'gap': 50
+            })
+
+
+            # Definir valor máximo do eixo Y para o gráfico de colunas
+            chart.set_y_axis({
+                'min': 0,
+                'max': total_except_reclamacao,
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+                'num_font': {'color': 'white'},
+                'line': {'none': True}
+            })
+
+            chart_sheet.set_chart(chart)
+            chart.set_title({
+                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_except_reclamacao} manifestações - {data_inicio_formatada} - {data_fim_formatada}',
+                'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}
+            })
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False,
+                                       'color': 'black'},})
+            chart.set_x_axis({
+                'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -66},
+                'major_gridlines': {'visible': False},
+                'line': {'none': True}
+            })
+
+            line_chart = workbook.add_chart({'type': 'line'})
+            line_chart.add_series({
+                'name': '% Acumulado',
+                'categories': [sheet_name, 1, 0, df_except_reclamacao.shape[0], 0],
+                'values': [sheet_name, 1, 2, df_except_reclamacao.shape[0], 2],
+                'line': {'color': 'black', 'width': 1.0},
+                'y2_axis': True,
+            })
+            line_chart.set_y2_axis({
+                'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
+                'num_format': '0%',
+                'max': 1,
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'},
+                'line': {'none': True}
+            })
+
+            # Combinar os gráficos de colunas e linha
+            chart.combine(line_chart)
+
+        elif sheet_name == f'Exceto reclamacao {data_fim}':
+            chart_sheet = workbook.add_chartsheet('GRAPH07')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            cores = {
+                'Redes Sociais': '#008080',
+                'Elogio': '#32CD32',
+                'Solicitação': '#F4A460',
+                'Informação': '#6495ED',
+                'Manifestações Em Menor Volume': '#4F4F4F',
+                'Crítica': '#FFD700',
+                'Sugestão': '#FF00FF'
+            }
+
+            categorias = df.iloc[:, 0].tolist()  # Lista de todas as categorias completas
+            valores = df.iloc[:, 1].tolist()  # Lista de todos os valores correspondentes
+
+            # Criando lista de cores para cada ponto
+            cores_pontos = []
+            for categoria_completa in categorias:
+                categoria = categoria_completa.split(' - ')[0]
+                cor = cores.get(categoria, '#4F4F4F')  # Define a cor com base na categoria
+                cores_pontos.append({'fill': {'color': cor}})
+
+            # Adicionar a série com valores e cores
+            chart.add_series({
+                'name': 'Manifestações',
+                'categories': [sheet_name, 1, 0, len(categorias), 0],
+                'values': [sheet_name, 1, 1, len(categorias), 1],
+                'points': cores_pontos,
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
+                'gap': 50,
+                'fill': {'color': '#4F4F4F'},
+            })
+
+            chart_sheet.set_chart(chart)
+            chart.set_title({
+                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_except_reclamacao_last_date} manifestações - {data_fim_formatada}',
+                'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}
+            })
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False,
+                                       'color': 'black'}})
+            chart.set_x_axis({
+                'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -66},
+                'major_gridlines': {'visible': False},
+                'line': {'none': True}
+            })
+
+            chart.set_y_axis({
+                    'min': 0,
+                    'max': total_except_reclamacao_last_date,
+                    'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
+                    'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
+                    'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'white'},
+                    'num_font': {'color': 'white'},
+                    'line': {'none': True}
+                })
+
+
+            line_chart = workbook.add_chart({'type': 'line'})
+            line_chart.add_series({
+                'name': '% Acumulado',
+                'categories': [sheet_name, 1, 0, len(categorias), 0],
+                # Ajuste para o mesmo intervalo de categorias do gráfico de colunas
+                'values': [sheet_name, 1, 2, len(categorias), 2],
+                # Ajuste para os mesmos valores e colunas correspondentes
+                'line': {'color': 'black', 'width': 1.0},
+                'y2_axis': True,
+            })
+            line_chart.set_y2_axis({
+                'major_gridlines': {'visible': False},
+                'minor_gridlines': {'visible': False},
+                'num_format': '0%',
+                'max': 1,
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'black'},
+                'line': {'none': True}
+            })
+            # Combinar os gráficos de colunas e linha
+            chart.combine(line_chart)
+
+        elif sheet_name == 'Por Categoria':
+            chart_sheet = workbook.add_chartsheet('GRAPH08')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+
+            for i, col in enumerate(df.columns[1:], 1):
+                chart.add_series({
+                    'name': [sheet_name, 0, i],
+                    'categories': [sheet_name, 1, 0, len(df), 0],
+                    'values': [sheet_name, 1, i, len(df), i],
+                    'fill': {'color': ['#9DC3E6', '#BFBFBF', '#FFD966'][i - 1]},
+                    'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12}},
+                    'gap': 50
+                })
+
+            chart.set_title({'name': f'{titulo_grafico} \nTotal de manifestações por categoria \n{data_inicio_formatada} a {data_fim_formatada}',
+                             'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}})
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                'minor_gridlines': {'visible': False},
+                              'num_font': {'name': 'Segoe UI', 'size': 12}, 'major_gridlines': {'visible': False},
+                              'line': {'none': True}})
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+            chart.set_legend({'position': 'top',
+                                          'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False,
+                                                   'color': 'black'}})
+            chart.set_size({'x_scale': 1.5, 'y_scale': 1.5})
+            chart_sheet.set_chart(chart)
+
+        elif sheet_name == f'Por Categoria {data_fim}':
+            chart_sheet = workbook.add_chartsheet('GRAPH09')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+
+            for i, col in enumerate(df.columns[1:], 1):
+                chart.add_series({
+                    'name': [sheet_name, 0, i],
+                    'categories': [sheet_name, 1, 0, len(df), 0],
+                    'values': [sheet_name, 1, i, len(df), i],
+                    'fill': {'color': ['#9DC3E6', '#BFBFBF', '#FFD966'][i - 1]},
+                    'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 12}},
+                    'gap': 50})
+
+            chart.set_title({'name': f'{titulo_grafico} \nTotal de manifestações por categoria \n{data_fim_formatada}',
+                             'name_font': {'name': 'Segoe UI', 'size': 16, 'bold': False, 'color': 'black'}})
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                            'minor_gridlines': {'visible': False},
+                              'num_font': {'name': 'Segoe UI', 'size': 12}, 'major_gridlines': {'visible': False},
+                              'line': {'none': True}})
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+            chart.set_legend({'position': 'top',
+                                          'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False,
+                                                   'color': 'black'}})
+            chart_sheet.set_chart(chart)
+
+
 
     workbook.close()
 
