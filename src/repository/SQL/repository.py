@@ -31,30 +31,27 @@ class SQLRepository:
         finally:
             infra.close_connection()
     @classmethod
-    def evolução_por_canal(cls, _escopo_trad: int, _escopo_dig: int, data_inicio: str, data_fim: str):
-            infra_sql = InfrastructureSQL()
-            infra_sql.connect()
-            database_cursor = infra_sql.conn.cursor()
+    def evolução_por_canal(cls, _escopo_trad: int, _escopo_dig: int, data_inicio: str = None, data_fim: str = None):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.conn.cursor()
 
-            # Convertendo as datas de entrada para o formato adequado
-            data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
-            data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        try:
+            # Convertendo as datas de entrada para o formato adequado, se fornecidas
+            if data_inicio:
+                data_inicio = datetime.strptime(data_inicio, '%Y-%m').date().replace(day=1)
+            if data_fim:
+                data_fim = datetime.strptime(data_fim, '%Y-%m').date().replace(day=1)
 
-            # Definindo o primeiro dia do mês para as datas de início e fim
-            data_inicio = data_inicio.replace(day=1)
-            data_fim = data_fim.replace(day=1)
-
-            # Consulta SQL com parâmetros para as datas
+            # Consulta SQL base sem as condições de data
             query = '''WITH Manifestações_Digitais AS (
                             SELECT Mes_ano, COUNT(*) AS Manifestações_Digitais
                             FROM CAMIL.dbo.Escopo_{0}
-                            WHERE Mes_ano BETWEEN ? AND ?
                             GROUP BY Mes_ano
                       ), 
                       Manifestações_tradicionais AS (
                             SELECT Mes_ano, COUNT(*) AS Manifestações_tradicionais
                             FROM CAMIL.dbo.Escopo_{1}
-                            WHERE Mes_ano BETWEEN ? AND ?
                             GROUP BY Mes_ano
                       ) 
                       SELECT COALESCE(c8006.Mes_ano, c9006.Mes_ano) AS Mes_ano, 
@@ -62,10 +59,23 @@ class SQLRepository:
                              COALESCE(Manifestações_Digitais, 0) AS Quantidade_Linhas_digital
                       FROM Manifestações_Digitais c8006 
                       FULL JOIN Manifestações_tradicionais c9006 
-                      ON c8006.Mes_ano = c9006.Mes_ano 
-                      ORDER BY Mes_ano'''.format(_escopo_dig, _escopo_trad)
+                      ON c8006.Mes_ano = c9006.Mes_ano'''.format(_escopo_dig, _escopo_trad)
 
-            database_cursor.execute(query, (data_inicio, data_fim, data_inicio, data_fim))
+            params = []
+
+            # Adicionar as condições de data à consulta se fornecidas
+            if data_inicio and data_fim:
+                query += " WHERE COALESCE(c8006.Mes_ano, c9006.Mes_ano) BETWEEN ? AND ?"
+                params.extend([data_inicio, data_fim])
+
+            query += " ORDER BY Mes_ano"
+
+            # Executar a consulta SQL com os parâmetros fornecidos, se houver
+            if params:
+                database_cursor.execute(query, params)
+            else:
+                database_cursor.execute(query)
+
             result_tradicional = database_cursor.fetchall()
 
             infra_sql.close_connection()
@@ -79,6 +89,13 @@ class SQLRepository:
             df_tradicional = pd.DataFrame(df_data)
 
             return df_tradicional
+
+        except ValueError as e:
+            print(f"Erro ao converter datas: {e}")
+            return pd.DataFrame()  # Retorna um DataFrame vazio em caso de erro
+
+        finally:
+            infra_sql.close_connection()
     @classmethod
     def repren_tipos_ocorrencia_timestamp_period(cls, _escopo: int, data_inicio: str, data_fim: str):
         infra_sql = InfrastructureSQL()
@@ -139,23 +156,7 @@ class SQLRepository:
         infra_sql.close_connection()
 
         return df
-    @classmethod
-    def get_total_manifestation_bd(cls, escopo: int, data_inicio: str, data_fim: str):
-        query = 'SELECT Escopo, ID, Tipo_de_ocorrencia, Grupo_de_tipo_de_ocorrencia, Ocorrencia, Mes, Total FROM CAMIL_MANIFESTACAO_CUBO WHERE ID = 1 AND Escopo = ? AND CONVERT(date, Mes) >= ? AND CONVERT(date, Mes) <= ?'
-        params = (escopo, data_inicio, data_fim)
-        infra = InfrastructureSQL()
-        infra.connect()
-        cursor = infra.conn.cursor()
-        cursor.execute(query, params)
-        columns = [desc[0] for desc in cursor.description]
-        result = cursor.fetchall()
-        df_data = []
-        for row in result:
-            converted_row = [float(val) if isinstance(val, Decimal) else val for val in row]
-            df_data.append(converted_row)
-        df = pd.DataFrame(df_data, columns=columns)
 
-        return df
     @classmethod
     def repren_tipos_ocorrencia_final_period(cls, _escopo: int, data_fim: str):
         infra_sql = InfrastructureSQL()

@@ -17,7 +17,6 @@ class InfrastructureSQL:
                 f'TRUSTED_CONNECTION={"yes" if trusted_connection else "no"};'
             )
             self.conn = pyodbc.connect(conn_str)
-            print("Conexão estabelecida com sucesso.")
         except Exception as e:
             print(f"Erro ao conectar ao SQL Server: {e}")
             return self.conn
@@ -25,7 +24,6 @@ class InfrastructureSQL:
     def close_connection(self):
         try:
             self.conn.close()
-            print("Conexão fechada com sucesso.")
         except Exception as e:
             print(f"Erro ao fechar conexão: {e}")
 

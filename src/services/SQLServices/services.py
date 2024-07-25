@@ -1,212 +1,80 @@
-from src.repository.SQL.repository import SQLRepository
-import xlsxwriter
+import os
 import pandas as pd
-import locale
 from datetime import datetime
+import xlsxwriter
+from src.models.variables.variables import VariableTreatment
+from src.models.style_dfs.style import  StylesDfs
+from src.domain.services.charts import DomainService
 
-locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
-# escopo = input('Informe o número do escopo desejado: ')
-# id_ = input('Informe o número do ID para o escopo escolhido: ')
-# escopo_tradicional = input('Informe o Número do escopo referente ao canal TRADICIONAL: ')
-# escopo_digital = input('Informe o número do escopo referente ao canal DIGITAL: ')
-# data_inicio = input('Informe a data de Partida/Inicial nesse formato -> yyyy-mm: ')
-# data_fim = input('Informe a data de Encerramento/Fim nesse formato -> yyyy-mm: ')
-escopo = 1007
-id_ = 1
-escopo_tradicional = 9006
-escopo_digital = 8006
-data_inicio = '2023-02'
-data_fim = '2024-02'
+def run_service(escopo, escopo_trad, escopo_dig, start_date, end_date):
 
-data_inicio_format = datetime.strptime(data_inicio, "%Y-%m")
-data_fim_format = datetime.strptime(data_fim, "%Y-%m")
-data_inicio_formatada = data_inicio_format.strftime("%b/%Y").capitalize()
-data_fim_formatada = data_fim_format.strftime("%b/%Y").capitalize()
-escopo_name = SQLRepository.get_escopo_name_bd(escopo)
-nome_do_escopo = escopo_name['Nome_Escopo_Hierarquia'].to_string(index=False)
-titulo_grafico = nome_do_escopo.replace('[', '').replace(']', '')
-df_evolucao_p_canal = SQLRepository.evolução_por_canal(escopo_tradicional, escopo_digital, data_inicio, data_fim)
-df_pie_timestamp = SQLRepository.repren_tipos_ocorrencia_timestamp_period(escopo, data_inicio, data_fim)
-df_pie_first_period = SQLRepository.repren_tipos_ocorrencia_first_period(escopo, data_inicio)
-df_pie_final_period = SQLRepository.repren_tipos_ocorrencia_final_period(escopo, data_fim)
-df_pie_timestamp['Tipo_de_ocorrencia'] = df_pie_timestamp['Tipo_de_ocorrencia'].str.title()
-df_pie_first_period['Tipo_de_ocorrencia'] = df_pie_first_period['Tipo_de_ocorrencia'].str.title()
-df_pie_final_period['Tipo_de_ocorrencia'] = df_pie_final_period['Tipo_de_ocorrencia'].str.title()
-total_manifestações = SQLRepository.get_total_manifestation_bd(id_, escopo)
-soma_total_geral = int(total_manifestações['Total'].sum())
-sum_first_data = int(df_pie_first_period['Total'].sum())
-sum_final_data = int(df_pie_final_period['Total'].sum())
-data_geral = total_manifestações['Mes'] = pd.to_datetime(total_manifestações['Mes'], format='%m/%Y')
+    title_chart = VariableTreatment.chart_title_escopo(escopo)
+    start_date_sql = datetime.strptime(start_date, "%Y-%m")
+    end_date_sql = datetime.strptime(end_date, "%Y-%m")
+    date_formatting_initial = VariableTreatment.date_formatting_initial(start_date)
+    date_formatting_end = VariableTreatment.date_formatting_end(end_date)
+    sum_total = VariableTreatment.get_sum_total(escopo, start_date_sql, end_date_sql)
+    sum_period_data = VariableTreatment.get_sum_timestamp_chart_pie(escopo, start_date, end_date)
+    sum_first_data = VariableTreatment.get_sum_first_period_chart_pie(escopo, start_date)
+    sum_final_data = VariableTreatment.get_sum_end_period_chart_pie(escopo, end_date)
+    points = StylesDfs.points_chart_pie
 
-with pd.ExcelWriter('output.xlsx') as writer:
-    df_evolucao_p_canal.to_excel(writer, sheet_name=f'Manifestação_p_Canal {data_inicio}', index=False)
-    df_pie_timestamp.to_excel(writer, sheet_name='Manis_Tipo_Ocorrencia', index=False)
-    df_pie_first_period.to_excel(writer, sheet_name=f'Manis_Tipo_Ocorrencia {data_inicio}', index=False)
-    df_pie_final_period.to_excel(writer, sheet_name=f'Manis_Tipo_Ocorrencia {data_fim}', index=False)
+    desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
+    if not os.path.exists(desktop_path):  # Caso o usuário não esteja no Windows
+        desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop')
 
-dataframe_original = pd.read_excel('output.xlsx', sheet_name=None)
-workbook = xlsxwriter.Workbook('output_with_charts.xlsx',  {'nan_inf_to_errors': True})
-chart_title_format = workbook.add_format({'bold': True, 'font_size': 14})
+    reports_folder_path = os.path.join(desktop_path, 'Graficos_Py')
+    if not os.path.exists(reports_folder_path):
+        os.makedirs(reports_folder_path)
 
-for sheet_name, df in dataframe_original.items():
-    worksheet = workbook.add_worksheet(sheet_name)
-    for row_num, row_data in enumerate(df.values):
-        worksheet.write_row(row_num + 1, 0, row_data)
-    for col_num, value in enumerate(df.columns.values):
-        worksheet.write(0, col_num, value)
+    output_file_path = os.path.join(reports_folder_path, 'output.xlsx')
+    name_graph = f'Gráficos_p_Relátorio {title_chart} - {start_date} a {end_date}.xlsx'
+    file_path = os.path.join(reports_folder_path, name_graph)
 
-    if sheet_name == f'Manifestação_p_Canal {data_inicio}':
-        soma_tradicional = df['Quantidade_Linhas_tradicional'].sum()
-        soma_digital = df['Quantidade_Linhas_digital'].sum()
-        df.rename(columns={df.columns[1]: f'Tradicionais = {soma_tradicional} ', df.columns[2]: f'Digitais = {soma_digital}'}, inplace=True)
-        date_format = workbook.add_format({'num_format': 'mmm/yyyy'})
-        worksheet.set_column('A:A', None, date_format)
-        chart_sheet = workbook.add_worksheet('Graf_Evolucao_canal')
-        chart_sheet.set_tab_color('#32CD32')
-        chart = workbook.add_chart({'type': 'line'})
+    with pd.ExcelWriter(output_file_path) as writer:
+        VariableTreatment.date_order_channel(escopo_trad, escopo_dig, start_date, end_date).to_excel(writer,
+                                                                                                     sheet_name=f'Manifestação_p_Canal {start_date}',
+                                                                                                     index=False)
+        VariableTreatment.order_occurrences_chart_pie(escopo, start_date, end_date).to_excel(writer,
+                                                                                             sheet_name='Manis_Tipo_Ocorrencia',
+                                                                                             index=False)
+        VariableTreatment.order_chart_pie_first_period(escopo, start_date).to_excel(writer,
+                                                                                    sheet_name=f'Manis_Tipo_Ocorrencia {start_date}',
+                                                                                    index=False)
+        VariableTreatment.order_chart_pie_final_period(escopo, end_date).to_excel(writer,
+                                                                                  sheet_name=f'Manis_Tipo_Ocorrencia {end_date}',
+                                                                                  index=False)
 
-        for i in range(1, df.shape[1]):
-            series_name = df.columns[i]
-            cor = '#800080' if series_name == f'Digitais = {soma_digital}' else '#DAA520'
-            chart.add_series({
-                        'name': series_name,
-                        'categories': [sheet_name, 1, 0, df.shape[0], 0],
-                        'values': [sheet_name, 1, i, df.shape[0], i],
-                        'line': {'color': cor, 'width': 1.0},
-                        'marker': {'type': 'circle', 'border': {'color': cor},'fill': {'color': cor}},
-                        'data_labels': {'value': True, 'font': {'color': cor}, 'position': 'above', 'align': 'left'}})
+    original_df = pd.read_excel(output_file_path, sheet_name=None)
+    workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
 
-            chart.set_title({'name': f'{titulo_grafico} \nEvolução das manifestações por canal\n{soma_total_geral} manifestações - {data_inicio_formatada} a {data_fim_formatada}',
-                                'name_font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'color': 'black'}})
-            chart.set_y_axis({'major_gridlines': {'visible': False}, 'visible': False})
-            chart.set_plotarea({'border': {'none': True}, 'fill': {'none': True}})
-            chart.set_legend({'position': 'bottom'})
-            chart.set_size({'x_scale': 2, 'y_scale': 1.5})
-            chart_sheet.insert_chart('A1', chart)
+    for sheet_name, df in original_df.items():
+        worksheet = workbook.add_worksheet(sheet_name)
+        for row_num, row_data in enumerate(df.values):
+            worksheet.write_row(row_num + 1, 0, row_data)
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value)
 
-    elif sheet_name == 'Manis_Tipo_Ocorrencia':
-        num_rows = df.shape[0]
-        chart_sheet = workbook.add_worksheet('Graf_manifestacao_p_ocorrencia')
-        chart_sheet.set_tab_color('#32CD32')
-        chart = workbook.add_chart({'type': 'pie'})
-        width_cm = 17  # largura em centímetros
-        height_cm = 12  # altura em centímetros
-            # Conversão de centímetros para pixels (considerando uma resolução de 96 pixels por polegada)
-        dpi = 96
-        width_px = width_cm * dpi / 2.54  # 2.54 cm = 1 polegada
-        height_px = height_cm * dpi / 2.54
-        chart.set_size({'width': width_px, 'height': height_px})
-        categorias = df['Tipo_de_ocorrencia'].tolist()
-        cores = ['#FFFF00', '#32CD32', '#87CEFA', '#C0C0C0', 'red', '#F4A460', '#FF00FF', '#008080']
-        points = [
-            {'fill': {'color': '#FFFF00'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#32CD32'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#87CEFA'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': 'red'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#F4A460'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#FF00FF'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#008080'}, 'border': {'color': 'white', 'width': 2}}
-        ]
-
-        chart.add_series({
-                'name': 'Ocorrências',
-                'categories': [sheet_name, 1, 0, df.shape[0], 0],
-                'values': [sheet_name, 1, 1, df.shape[0], 1],
-                'data_labels': {'percentage': True, 'position': 'outside_end', 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
-                'points': points,
-                })
-        # Definir título do gráfico
-        chart.set_title({
-            'name': f'{titulo_grafico} \nRepresentatividade de tipos de ocorrência\n{soma_total_geral} manifestações - {data_inicio_formatada} a {data_fim_formatada}',
-            'name_font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'color': 'black'},
-            'overlay': True})
-        chart.set_legend({
-            'position': 'left',  # Define a posição da legenda
-            'font': {'name': 'Segoe UI (Corpo)', 'size': 16, 'color': 'black'}})
-        chart.set_size({'x_scale': 2, 'y_scale': 1.5})  # Ajusta o tamanho do gráfico
-        chart_sheet.insert_chart('A1', chart)
+        if sheet_name == f'Manifestação_p_Canal {start_date}':
+            DomainService.chart_line_channel(df=df, workbook=workbook, worksheet=worksheet, sheet_name=sheet_name,
+                                             title_chart=title_chart, sum_total=sum_total,
+                                             date_start_format=date_formatting_initial,
+                                             date_end_format=date_formatting_end)
+        elif sheet_name == 'Manis_Tipo_Ocorrencia':
+            DomainService.chart_pie_types_occurrences_period(workbook=workbook, sheet_name=sheet_name, df=df,
+                                                             points=points, title_chart=title_chart,
+                                                             sum_period_data=sum_period_data,
+                                                             date_start_format=date_formatting_initial,
+                                                             date_end_format=date_formatting_end)
+        elif sheet_name == f'Manis_Tipo_Ocorrencia {start_date}':
+            DomainService.chart_pie_occurrences_first_period(workbook=workbook, sheet_name=sheet_name, df=df,
+                                                             points=points, date_start_format=start_date,
+                                                             sum_first_data=sum_first_data, title_chart=title_chart)
+        elif sheet_name == f'Manis_Tipo_Ocorrencia {end_date}':
+            DomainService.chart_pie_occurrences_final_period(workbook=workbook, sheet_name=sheet_name, df=df,
+                                                             points=points, title_chart=title_chart,
+                                                             date_end_format=end_date, sum_final_data=sum_final_data)
 
 
-    elif sheet_name == f'Manis_Tipo_Ocorrencia {data_inicio}':
-        num_rows = df.shape[0]
-        chart_sheet = workbook.add_worksheet(f'Graf_Ocorrencia {data_inicio}')
-        chart_sheet.set_tab_color('#32CD32')
-        chart = workbook.add_chart({'type': 'pie'})
-        width_cm = 17
-        height_cm = 12
-        dpi = 96
-        width_px = width_cm * dpi / 2.54
-        height_px = height_cm * dpi / 2.54
-        chart.set_size({'width': width_px, 'height': height_px})
-        categorias = df['Tipo_de_ocorrencia'].tolist()
-        points = [
-            {'fill': {'color': '#FFFF00'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#32CD32'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#87CEFA'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': 'red'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#F4A460'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#FF00FF'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#008080'}, 'border': {'color': 'white', 'width': 2}}
-        ]
-        chart.add_series({
-                'name': 'Ocorrências',
-                'categories': [sheet_name, 1, 0, df.shape[0], 0],
-                'values': [sheet_name, 1, 1, df.shape[0], 1],
-                'data_labels': {'percentage': True, 'position': 'outside_end', 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
-                'points': points})
-        # Definir título do gráfico
-        chart.set_title({
-                'name': f'{titulo_grafico} \nRepresentatividade de tipos de ocorrência\n{sum_first_data} manifestações - {data_inicio_formatada}',
-                'name_font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'color': 'black'},
-                'overlay': True})
-        chart.set_legend({
-                'position': 'left',  # Define a posição da legenda
-                'font': {'name': 'Segoe UI (Corpo)', 'size': 16, 'color': 'black'}})
-        chart.set_size({'x_scale': 2, 'y_scale': 1.5})  # Ajusta o tamanho do gráfico
-        chart_sheet.insert_chart('A1', chart)
-
-    elif sheet_name == f'Manis_Tipo_Ocorrencia {data_fim}':
-        num_rows = df.shape[0]
-        chart_sheet = workbook.add_worksheet(f'Graf_Ocorrencia {data_fim}')
-        chart_sheet.set_tab_color('#32CD32')
-        chart = workbook.add_chart({'type': 'pie'})
-        width_cm = 17
-        height_cm = 12
-        dpi = 96
-        width_px = width_cm * dpi / 2.54
-        height_px = height_cm * dpi / 2.54
-        chart.set_size({'width': width_px, 'height': height_px})
-        categorias = df['Tipo_de_ocorrencia'].tolist()
-        points = [
-            {'fill': {'color': '#FFFF00'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#32CD32'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#87CEFA'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#C0C0C0'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': 'red'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#F4A460'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#FF00FF'}, 'border': {'color': 'white', 'width': 2}},
-            {'fill': {'color': '#008080'}, 'border': {'color': 'white', 'width': 2}}
-        ]
-        chart.add_series({
-                'name': 'Ocorrências',
-                'categories': [sheet_name, 1, 0, df.shape[0], 0],
-                'values': [sheet_name, 1, 1, df.shape[0], 1],
-                'data_labels': {'percentage': True, 'position': 'outside_end', 'font': {'name': 'Segoe UI', 'size': 12, 'color': 'black'}},
-                'points': points})
-        # Definir título do gráfico
-        chart.set_title({
-                'name': f'{titulo_grafico} \nRepresentatividade de tipos de ocorrência\n{sum_final_data} manifestações - {data_fim_formatada}',
-                'name_font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'color': 'black'},
-                'overlay': True
-                            })
-        chart.set_legend({
-            'position': 'left',  # Define a posição da legenda
-            'font': {'name': 'Segoe UI (Corpo)', 'size': 16, 'color': 'black'}})
-        chart.set_size({'x_scale': 2, 'y_scale': 1.5})  # Ajusta o tamanho do gráfico
-        chart_sheet.insert_chart('A1', chart)
-
-workbook.close()
-
-
+    workbook.close()
+    return file_path
