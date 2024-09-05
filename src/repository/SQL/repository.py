@@ -643,45 +643,28 @@ ORDER BY sort_order, quantidade DESC;
             data_inicio = data_inicio.replace(day=1)
             data_fim = data_fim.replace(day=1)
 
-            query = '''WITH CTE AS (
-    SELECT 
-        LOWER(Linha_Maena) AS linha_maena,
-        COALESCE(LOWER(Variante_Maena), '') AS variante_maena,
-        COUNT(*) AS quantidade
-    FROM Escopo_{}
-    WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ?  -- Filtra pelo intervalo de datas
-    GROUP BY LOWER(Linha_Maena), COALESCE(LOWER(Variante_Maena), '')  -- Agrupa pelas linhas e variantes em lowercase
-),
-Top10 AS (
-    SELECT 
-        linha_maena,
-        variante_maena,
-        quantidade
-    FROM CTE
-    WHERE linha_maena = 'speciale' OR variante_maena != ''  -- Inclui apenas linhas relevantes
-    ORDER BY quantidade DESC  -- Ordena pelas mais frequentes
-    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY  -- Limita ao Top 10
-),
-GeneralMasses AS (
-    SELECT 
-        'Em geral' AS concatenated_name,
-        SUM(quantidade) AS quantidade
-    FROM CTE
-    WHERE (linha_maena = '' OR linha_maena IS NULL) AND (variante_maena = '' OR variante_maena IS NULL)  -- Filtra linhas sem Linha_Maena e Variante_Maena preenchidos
-)
-SELECT 
-    CASE 
-        WHEN linha_maena = 'regular' THEN variante_maena
-        ELSE linha_maena + ' - ' + variante_maena 
-    END AS concatenated_name,
-    quantidade
-FROM Top10
-UNION ALL
-SELECT 
-    concatenated_name,
-    quantidade
-FROM GeneralMasses
-ORDER BY quantidade DESC;  -- Exibe as top 10 e o total das massas em geral em ordem decrescente de frequência
+            query = '''SELECT TOP 10
+    CASE
+        WHEN Linha_Maena IS NULL AND Variante_Maena IS NULL THEN 'CORTES EM GERAL'
+        WHEN Linha_Maena = 'regular' THEN Variante_Maena
+        WHEN Linha_Maena IS NOT NULL AND Variante_Maena IS NOT NULL THEN CONCAT(Linha_Maena, '-', Variante_Maena)
+        WHEN Linha_Maena IS NOT NULL THEN Linha_Maena
+        WHEN Variante_Maena IS NOT NULL THEN Variante_Maena
+        ELSE 'CORTES EM GERAL'
+    END AS Concatenado,
+    COUNT(*) AS Total
+FROM Escopo_{}
+WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ?
+GROUP BY 
+    CASE
+        WHEN Linha_Maena IS NULL AND Variante_Maena IS NULL THEN 'CORTES EM GERAL'
+        WHEN Linha_Maena = 'regular' THEN Variante_Maena
+        WHEN Linha_Maena IS NOT NULL AND Variante_Maena IS NOT NULL THEN CONCAT(Linha_Maena, '-', Variante_Maena)
+        WHEN Linha_Maena IS NOT NULL THEN Linha_Maena
+        WHEN Variante_Maena IS NOT NULL THEN Variante_Maena
+        ELSE 'CORTES EM GERAL'
+    END
+ORDER BY Total DESC;
 '''.format(escopo)
 
             database_cursor.execute(query, (data_inicio, data_fim))
@@ -696,59 +679,42 @@ ORDER BY quantidade DESC;  -- Exibe as top 10 e o total das massas em geral em o
 
     @classmethod
     def chart_columns_line_and_variant_last_date(cls, escopo, data_fim):
-            infra_sql = InfrastructureSQL()
-            infra_sql.connect()
-            database_cursor = infra_sql.cursor_db()
-            data_fim = datetime.strptime(data_fim, '%Y-%m').date()
-            data_fim = data_fim.replace(day=1)
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_fim = data_fim.replace(day=1)
 
-            query = '''WITH CTE AS (
-    SELECT 
-        LOWER(Linha_Maena) AS linha_maena,
-        COALESCE(LOWER(Variante_Maena), '') AS variante_maena,
-        COUNT(*) AS quantidade
-    FROM Escopo_{}
-    WHERE CONVERT(date, Mes_ano) = ?  -- Filtra pelo intervalo de datas
-    GROUP BY LOWER(Linha_Maena), COALESCE(LOWER(Variante_Maena), '')  -- Agrupa pelas linhas e variantes em lowercase
-),
-Top10 AS (
-    SELECT 
-        linha_maena,
-        variante_maena,
-        quantidade
-    FROM CTE
-    WHERE linha_maena = 'speciale' OR variante_maena != ''  -- Inclui apenas linhas relevantes
-    ORDER BY quantidade DESC  -- Ordena pelas mais frequentes
-    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY  -- Limita ao Top 10
-),
-GeneralMasses AS (
-    SELECT 
-        'Em geral' AS concatenated_name,
-        SUM(quantidade) AS quantidade
-    FROM CTE
-    WHERE (linha_maena = '' OR linha_maena IS NULL) AND (variante_maena = '' OR variante_maena IS NULL)  -- Filtra linhas sem Linha_Maena e Variante_Maena preenchidos
-)
-SELECT 
-    CASE 
-        WHEN linha_maena = 'regular' THEN variante_maena
-        ELSE linha_maena + ' - ' + variante_maena 
-    END AS concatenated_name,
-    quantidade
-FROM Top10
-UNION ALL
-SELECT 
-    concatenated_name,
-    quantidade
-FROM GeneralMasses
-ORDER BY quantidade DESC;  -- Exibe as top 10 e o total das massas em geral em ordem decrescente de frequência
-'''.format(escopo)
+        query = '''SELECT TOP 10
+                CASE
+                    WHEN Linha_Maena IS NULL AND Variante_Maena IS NULL THEN 'CORTES EM GERAL'
+                    WHEN Linha_Maena = 'regular' THEN Variante_Maena
+                    WHEN Linha_Maena IS NOT NULL AND Variante_Maena IS NOT NULL THEN CONCAT(Linha_Maena, '-', Variante_Maena)
+                    WHEN Linha_Maena IS NOT NULL THEN Linha_Maena
+                    WHEN Variante_Maena IS NOT NULL THEN Variante_Maena
+                    ELSE 'CORTES EM GERAL'
+                END AS Concatenado,
+                COUNT(*) AS Total
+            FROM Escopo_{}
+            WHERE CONVERT(date, Mes_ano) = ?
+            GROUP BY 
+                CASE
+                    WHEN Linha_Maena IS NULL AND Variante_Maena IS NULL THEN 'CORTES EM GERAL'
+                    WHEN Linha_Maena = 'regular' THEN Variante_Maena
+                    WHEN Linha_Maena IS NOT NULL AND Variante_Maena IS NOT NULL THEN CONCAT(Linha_Maena, '-', Variante_Maena)
+                    WHEN Linha_Maena IS NOT NULL THEN Linha_Maena
+                    WHEN Variante_Maena IS NOT NULL THEN Variante_Maena
+                    ELSE 'CORTES EM GERAL'
+                END
+            ORDER BY Total DESC;
+            '''.format(escopo)
 
-            database_cursor.execute(query, (data_fim))
-            results = database_cursor.fetchall()
+        database_cursor.execute(query, (data_fim))
+        results = database_cursor.fetchall()
 
-            df_data = [(row[0], row[1]) for row in results]
-            df = pd.DataFrame(df_data, columns=['Cortes', 'Total'])
+        df_data = [(row[0], row[1]) for row in results]
+        df = pd.DataFrame(df_data, columns=['Cortes', 'Total'])
 
-            infra_sql.close_connection()
+        infra_sql.close_connection()
 
-            return df
+        return df

@@ -1,6 +1,7 @@
 import tkinter as tk
 import os
 from tkinter import messagebox
+import numpy as np
 from src.repository.SQL.repository import SQLRepository
 import xlsxwriter
 import pandas as pd
@@ -159,6 +160,14 @@ def run_code():
     df_acumulate_line = pd.concat([resto_acumulate, volume_menor])
     df_acumulate_line['% Acumulado'] = df_acumulate_line['Total'] / total_reclamacoes_acumulate
     df_acumulate_line['% Acumulado'] = df_acumulate_line['% Acumulado'].cumsum()
+    df_acumulate_line.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_acumulate_line['Total'] = pd.to_numeric(df_acumulate_line['Total'], errors='coerce')
+    df_acumulate_line['% Acumulado'] = pd.to_numeric(df_acumulate_line['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_acumulate_line = df_acumulate_line.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_acumulate_line.reset_index(drop=True, inplace=True)
 
 
     df_acumulate_line_date_final = SQLRepository.chart_columns_line_reclamacao_last_date(escopo, data_fim)
@@ -175,6 +184,14 @@ def run_code():
     df_acumulate_line_date_final = pd.concat([resto_acumulate_final, volume_menor_final])
     df_acumulate_line_date_final['% Acumulado'] = df_acumulate_line_date_final['Total'] / total_acumulate_final_date
     df_acumulate_line_date_final['% Acumulado'] = df_acumulate_line_date_final['% Acumulado'].cumsum()
+    df_acumulate_line_date_final.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_acumulate_line_date_final['Total'] = pd.to_numeric(df_acumulate_line_date_final['Total'], errors='coerce')
+    df_acumulate_line_date_final['% Acumulado'] = pd.to_numeric(df_acumulate_line_date_final['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_acumulate_line_date_final = df_acumulate_line_date_final.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_acumulate_line_date_final.reset_index(drop=True, inplace=True)
 
 
     df_except_reclamacao = SQLRepository.chart_columns_line_except_reclamacao(escopo, data_inicio, data_fim)
@@ -190,6 +207,14 @@ def run_code():
     # Calcular a coluna '% Acumulado'
     df_except_reclamacao['% Acumulado'] = df_except_reclamacao['Total'] / total_except_reclamacao
     df_except_reclamacao['% Acumulado'] = df_except_reclamacao['% Acumulado'].cumsum()
+    df_except_reclamacao.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_except_reclamacao['Total'] = pd.to_numeric(df_except_reclamacao['Total'], errors='coerce')
+    df_except_reclamacao['% Acumulado'] = pd.to_numeric(df_except_reclamacao['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_except_reclamacao = df_except_reclamacao.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_except_reclamacao.reset_index(drop=True, inplace=True)
 
 
     df_except_reclamacao_last_date = SQLRepository.chart_columns_line_except_reclamacao_last_date(escopo, data_fim)
@@ -203,6 +228,22 @@ def run_code():
     df_except_reclamacao_last_date = pd.concat([resto_last_date, menor_volume_last_date])
     df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['Total'] / total_except_reclamacao_last_date
     df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['% Acumulado'].cumsum()
+    df_except_reclamacao_last_date.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_except_reclamacao_last_date['Total'] = pd.to_numeric(df_except_reclamacao_last_date['Total'], errors='coerce')
+    df_except_reclamacao_last_date['% Acumulado'] = pd.to_numeric(df_except_reclamacao_last_date['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_except_reclamacao_last_date = df_except_reclamacao_last_date.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_except_reclamacao_last_date.reset_index(drop=True, inplace=True)
+
+
+    df_line_and_variant = SQLRepository.chart_columns_line_and_variant(escopo, data_inicio, data_fim)
+    df_line_and_variant['Cortes'] = df_line_and_variant['Cortes'].str.title()
+
+    df_line_and_variant_last_date = SQLRepository.chart_columns_line_and_variant_last_date(escopo, data_fim)
+    df_line_and_variant_last_date['Cortes'] = df_line_and_variant_last_date['Cortes'].str.title()
+
 
     def manipular_dataframe(df_1):
         try:
@@ -283,6 +324,10 @@ def run_code():
             df_per_categoria.to_excel(writer, sheet_name='Por Categoria', index=False)
         if not df_per_categoria_final_date.empty:
             df_per_categoria_final_date.to_excel(writer, sheet_name=f'Por Categoria {data_fim}', index=False)
+        if not df_line_and_variant.empty:
+            df_line_and_variant.to_excel(writer, sheet_name='Cortes_Massas', index=False)
+        if not df_line_and_variant_last_date.empty:
+            df_line_and_variant_last_date.to_excel(writer, sheet_name='Cortes_Massas_last_date', index=False)
 
     dataframe_original = pd.read_excel(output_file_path, sheet_name=None)
     workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
@@ -700,6 +745,76 @@ def run_code():
                                                    'color': '#404040'}})
             chart.set_plotarea({'border': {'none': True, 'color': '#D9D9D9'}, 'fill': {'none': True}})
             chart_sheet.set_chart(chart)
+
+        elif sheet_name == 'Cortes_Massas':
+            chart_sheet = workbook.add_chartsheet('GRAPH10')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            # Adiciona a série com valores e cores
+            chart.add_series({
+                'name': 'Cortes',
+                'categories': [sheet_name, 1, 0, len(df), 0],
+                'values': [sheet_name, 1, 1, len(df), 1],
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+                'fill': {'color': '#4783ba'},  # Cor azul
+                'gap': 50
+            })
+
+            chart.set_title({'name': f'{titulo_grafico} \nTotal de manifestações por tipo de corte - 10 Principais Cortes \n{data_inicio_formatada} a {data_fim_formatada}',
+                             'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}})
+
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                            'minor_gridlines': {'visible': False},
+                            'name_font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}})
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+
+            chart.set_legend({'position': 'none'})
+
+
+            chart_sheet.set_chart(chart)
+
+        elif sheet_name == 'Cortes_Massas_last_date':
+            chart_sheet = workbook.add_chartsheet('GRAPH11')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            # Adiciona a série com valores e cores
+            chart.add_series({
+                'name': 'Cortes',
+                'categories': [sheet_name, 1, 0, len(df), 0],
+                'values': [sheet_name, 1, 1, len(df), 1],
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+                'fill': {'color': '#4783ba'},  # Cor azul
+                'gap': 50
+            })
+
+            chart.set_title({
+                                'name': f'{titulo_grafico} \nTotal de manifestações por tipo de corte - 10 Principais Cortes \n{data_inicio_formatada} a {data_fim_formatada}',
+                                'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}})
+
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                              'minor_gridlines': {'visible': False},
+                              'name_font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}})
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+
+            chart.set_legend({'position': 'none'})
+
+            chart_sheet.set_chart(chart)
+
+
+
+
 
 
 
