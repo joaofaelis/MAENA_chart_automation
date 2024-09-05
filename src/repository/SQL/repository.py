@@ -244,24 +244,31 @@ class SQLRepository:
         infra_sql = InfrastructureSQL()
         infra_sql.connect()
         database_cursor = infra_sql.cursor_db()
+
         data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
         data_fim = datetime.strptime(data_fim, '%Y-%m').date()
         data_inicio = data_inicio.replace(day=1)
         data_fim = data_fim.replace(day=1)
 
-        query = '''WITH CTE AS (
+        # Formatação segura para o nome da tabela
+        escopo_table = f"Escopo_{escopo}"
+
+        query = f'''
+        WITH CTE AS (
             SELECT 
                 CASE 
                     WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+                    WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
                     ELSE ocorrencia
                 END AS Ocorrencia,
                 COUNT(*) AS Quantidade
-            FROM CAMIL.dbo.Escopo_{}
+            FROM {escopo_table}
             WHERE Tipo_de_ocorrencia = 'Reclamação'
               AND CONVERT(date, Mes_ano) BETWEEN ? AND ? 
             GROUP BY 
                 CASE 
                     WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+                    WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
                     ELSE ocorrencia
                 END
         ),
@@ -290,7 +297,7 @@ class SQLRepository:
         SELECT Ocorrencia, Quantidade
         FROM FinalResult
         ORDER BY Sort_order, Quantidade DESC;
-        '''.format(escopo)
+        '''
 
         database_cursor.execute(query, (data_inicio, data_fim))
         results = database_cursor.fetchall()
@@ -307,61 +314,72 @@ class SQLRepository:
         infra_sql = InfrastructureSQL()
         infra_sql.connect()
         database_cursor = infra_sql.cursor_db()
+
+        # Converte data_fim para o formato correto
         data_fim = datetime.strptime(data_fim, '%Y-%m').date()
         data_fim = data_fim.replace(day=1)
 
-        query = '''WITH CTE AS (
-                SELECT 
-                    CASE 
-                        WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
-                        ELSE ocorrencia
-                    END AS Ocorrencia,
-                    COUNT(*) AS Quantidade
-                FROM CAMIL.dbo.Escopo_{}
-                WHERE Tipo_de_ocorrencia = 'Reclamação'
-                  AND CONVERT(date, Mes_ano) = ?
-                GROUP BY 
-                    CASE 
-                        WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
-                        ELSE ocorrencia
-                    END
-            ),
-            Top10 AS (
-                SELECT 
-                    Ocorrencia,
-                    Quantidade,
-                    0 AS Sort_order
-                FROM CTE
-                ORDER BY Quantidade DESC
-                OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
-            ),
-            Remaining AS (
-                SELECT 
-                    'Reclamações em menor volume' AS Ocorrencia,
-                    SUM(Quantidade) AS Quantidade,
-                    1 AS Sort_order
-                FROM CTE
-                WHERE Ocorrencia NOT IN (SELECT Ocorrencia FROM Top10)
-            ),
-            FinalResult AS (
-                SELECT Ocorrencia, Quantidade, Sort_order FROM Top10
-                UNION ALL
-                SELECT Ocorrencia, Quantidade, Sort_order FROM Remaining
-            )
-            SELECT Ocorrencia, Quantidade
-            FROM FinalResult
-            ORDER BY Sort_order, Quantidade DESC;
-            '''.format(escopo)
+        # Formatação segura para o nome da tabela
+        escopo_table = f"Escopo_{escopo}"
 
-        database_cursor.execute(query, (data_fim))
+        query = f'''
+              WITH CTE AS (
+                  SELECT 
+                      CASE 
+                          WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+                          WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+                          ELSE ocorrencia
+                      END AS Ocorrencia,
+                      COUNT(*) AS Quantidade
+                  FROM {escopo_table}
+                  WHERE Tipo_de_ocorrencia = 'Reclamação'
+                    AND CONVERT(date, Mes_ano) = ?
+                  GROUP BY 
+                      CASE 
+                          WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+                          WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+                          ELSE ocorrencia
+                      END
+              ),
+              Top10 AS (
+                  SELECT 
+                      Ocorrencia,
+                      Quantidade,
+                      0 AS Sort_order
+                  FROM CTE
+                  ORDER BY Quantidade DESC
+                  OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+              ),
+              Remaining AS (
+                  SELECT 
+                      'Reclamações em menor volume' AS Ocorrencia,
+                      SUM(Quantidade) AS Quantidade,
+                      1 AS Sort_order
+                  FROM CTE
+                  WHERE Ocorrencia NOT IN (SELECT Ocorrencia FROM Top10)
+              ),
+              FinalResult AS (
+                  SELECT Ocorrencia, Quantidade, Sort_order FROM Top10
+                  UNION ALL
+                  SELECT Ocorrencia, Quantidade, Sort_order FROM Remaining
+              )
+              SELECT Ocorrencia, Quantidade
+              FROM FinalResult
+              ORDER BY Sort_order, Quantidade DESC;
+              '''
+
+        # Executa a consulta com o parâmetro data_fim
+        database_cursor.execute(query, (data_fim,))
         results = database_cursor.fetchall()
 
+        # Converte os resultados para um DataFrame
         df_data = [(row[0], row[1]) for row in results]
         df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
 
         infra_sql.close_connection()
 
         return df
+
     @classmethod
     def chart_columns_line_except_reclamacao(cls, escopo, data_inicio, data_fim):
         infra_sql = InfrastructureSQL()
