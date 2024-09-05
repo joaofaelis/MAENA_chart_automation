@@ -632,3 +632,123 @@ ORDER BY sort_order, quantidade DESC;
         df = pd.DataFrame(data, columns=columns)
 
         return df
+
+    @classmethod
+    def chart_columns_line_and_variant(cls, escopo, data_inicio, data_fim):
+            infra_sql = InfrastructureSQL()
+            infra_sql.connect()
+            database_cursor = infra_sql.cursor_db()
+            data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
+            data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+            data_inicio = data_inicio.replace(day=1)
+            data_fim = data_fim.replace(day=1)
+
+            query = '''WITH CTE AS (
+    SELECT 
+        LOWER(Linha_Maena) AS linha_maena,
+        COALESCE(LOWER(Variante_Maena), '') AS variante_maena,
+        COUNT(*) AS quantidade
+    FROM Escopo_{}
+    WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ?  -- Filtra pelo intervalo de datas
+    GROUP BY LOWER(Linha_Maena), COALESCE(LOWER(Variante_Maena), '')  -- Agrupa pelas linhas e variantes em lowercase
+),
+Top10 AS (
+    SELECT 
+        linha_maena,
+        variante_maena,
+        quantidade
+    FROM CTE
+    WHERE linha_maena = 'speciale' OR variante_maena != ''  -- Inclui apenas linhas relevantes
+    ORDER BY quantidade DESC  -- Ordena pelas mais frequentes
+    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY  -- Limita ao Top 10
+),
+GeneralMasses AS (
+    SELECT 
+        'Em geral' AS concatenated_name,
+        SUM(quantidade) AS quantidade
+    FROM CTE
+    WHERE (linha_maena = '' OR linha_maena IS NULL) AND (variante_maena = '' OR variante_maena IS NULL)  -- Filtra linhas sem Linha_Maena e Variante_Maena preenchidos
+)
+SELECT 
+    CASE 
+        WHEN linha_maena = 'regular' THEN variante_maena
+        ELSE linha_maena + ' - ' + variante_maena 
+    END AS concatenated_name,
+    quantidade
+FROM Top10
+UNION ALL
+SELECT 
+    concatenated_name,
+    quantidade
+FROM GeneralMasses
+ORDER BY quantidade DESC;  -- Exibe as top 10 e o total das massas em geral em ordem decrescente de frequência
+'''.format(escopo)
+
+            database_cursor.execute(query, (data_inicio, data_fim))
+            results = database_cursor.fetchall()
+
+            df_data = [(row[0], row[1]) for row in results]
+            df = pd.DataFrame(df_data, columns=['Cortes', 'Total'])
+
+            infra_sql.close_connection()
+
+            return df
+
+    @classmethod
+    def chart_columns_line_and_variant_last_date(cls, escopo, data_fim):
+            infra_sql = InfrastructureSQL()
+            infra_sql.connect()
+            database_cursor = infra_sql.cursor_db()
+            data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+            data_fim = data_fim.replace(day=1)
+
+            query = '''WITH CTE AS (
+    SELECT 
+        LOWER(Linha_Maena) AS linha_maena,
+        COALESCE(LOWER(Variante_Maena), '') AS variante_maena,
+        COUNT(*) AS quantidade
+    FROM Escopo_{}
+    WHERE CONVERT(date, Mes_ano) = ?  -- Filtra pelo intervalo de datas
+    GROUP BY LOWER(Linha_Maena), COALESCE(LOWER(Variante_Maena), '')  -- Agrupa pelas linhas e variantes em lowercase
+),
+Top10 AS (
+    SELECT 
+        linha_maena,
+        variante_maena,
+        quantidade
+    FROM CTE
+    WHERE linha_maena = 'speciale' OR variante_maena != ''  -- Inclui apenas linhas relevantes
+    ORDER BY quantidade DESC  -- Ordena pelas mais frequentes
+    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY  -- Limita ao Top 10
+),
+GeneralMasses AS (
+    SELECT 
+        'Em geral' AS concatenated_name,
+        SUM(quantidade) AS quantidade
+    FROM CTE
+    WHERE (linha_maena = '' OR linha_maena IS NULL) AND (variante_maena = '' OR variante_maena IS NULL)  -- Filtra linhas sem Linha_Maena e Variante_Maena preenchidos
+)
+SELECT 
+    CASE 
+        WHEN linha_maena = 'regular' THEN variante_maena
+        ELSE linha_maena + ' - ' + variante_maena 
+    END AS concatenated_name,
+    quantidade
+FROM Top10
+UNION ALL
+SELECT 
+    concatenated_name,
+    quantidade
+FROM GeneralMasses
+ORDER BY quantidade DESC;  -- Exibe as top 10 e o total das massas em geral em ordem decrescente de frequência
+'''.format(escopo)
+
+            database_cursor.execute(query, (data_fim))
+            results = database_cursor.fetchall()
+
+            df_data = [(row[0], row[1]) for row in results]
+            df = pd.DataFrame(df_data, columns=['Cortes', 'Total'])
+
+            infra_sql.close_connection()
+
+            return df
