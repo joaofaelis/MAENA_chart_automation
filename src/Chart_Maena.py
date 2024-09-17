@@ -244,6 +244,26 @@ def run_code():
     df_line_and_variant_last_date = SQLRepository.chart_columns_line_and_variant_last_date(escopo, data_fim)
     df_line_and_variant_last_date['Cortes'] = df_line_and_variant_last_date['Cortes'].str.title()
 
+    df_colunms_sub2 = SQLRepository.chart_columns_Subnvl2(escopo, data_inicio, data_fim)
+    df_colunms_sub2['Subcategoria_nvl2'] = df_colunms_sub2['Subcategoria_nvl2'].str.title()
+    df_colunms_sub2.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_colunms_sub2['Total'] = pd.to_numeric(df_colunms_sub2['Total'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_colunms_sub2 = df_colunms_sub2.dropna(subset=['Total'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_colunms_sub2.reset_index(drop=True, inplace=True)
+
+    df_colunms_sub2_last_date = SQLRepository.chart_columns_Subnvl2_last_date(escopo, data_fim)
+    df_colunms_sub2_last_date['Subcategoria_nvl2'] = df_colunms_sub2_last_date['Subcategoria_nvl2'].str.title()
+    df_colunms_sub2_last_date.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_colunms_sub2_last_date['Total'] = pd.to_numeric(df_colunms_sub2_last_date['Total'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_colunms_sub2_last_date = df_colunms_sub2_last_date.dropna(subset=['Total'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_colunms_sub2_last_date.reset_index(drop=True, inplace=True)
+
 
     def manipular_dataframe(df_1):
         try:
@@ -328,6 +348,10 @@ def run_code():
             df_line_and_variant.to_excel(writer, sheet_name='Cortes_Massas', index=False)
         if not df_line_and_variant_last_date.empty:
             df_line_and_variant_last_date.to_excel(writer, sheet_name='Cortes_Massas_last_date', index=False)
+        if not df_colunms_sub2.empty:
+            df_colunms_sub2.to_excel(writer, sheet_name='SubCategoria2', index=False)
+        if not df_colunms_sub2_last_date.empty:
+            df_colunms_sub2_last_date.to_excel(writer, sheet_name='SubCategoria2_last_date', index=False)
 
     dataframe_original = pd.read_excel(output_file_path, sheet_name=None)
     workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
@@ -795,6 +819,72 @@ def run_code():
 
             chart.set_title({
                                 'name': f'{titulo_grafico} \nTotal de manifestações por tipo de corte - 10 Principais Cortes \n{data_inicio_formatada} a {data_fim_formatada}',
+                                'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}})
+
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                              'minor_gridlines': {'visible': False},
+                              'name_font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}})
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+
+            chart.set_legend({'position': 'none'})
+
+            chart_sheet.set_chart(chart)
+
+        elif sheet_name == 'SubCategoria2':
+            chart_sheet = workbook.add_chartsheet('GRAPH12')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            # Adiciona a série com valores e cores
+            chart.add_series({
+                'name': 'Subcategorias_2',
+                'categories': [sheet_name, 1, 0, len(df), 0],
+                'values': [sheet_name, 1, 1, len(df), 1],
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+                'fill': {'color': '#4783ba'},  # Cor azul
+                'gap': 50
+            })
+
+            chart.set_title({
+                                'name': f'{titulo_grafico} \nTotal de manifestações por tipo de Subcategorias - 10 Principais manifestações \n{data_inicio_formatada} a {data_fim_formatada}',
+                                'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}})
+
+            chart.set_x_axis({'major_gridlines': {'visible': False},
+                              'minor_gridlines': {'visible': False},
+                              'name_font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}})
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_y_axis({'visible': False,
+                              'major_gridlines': {'visible': False}})
+
+            chart.set_legend({'position': 'none'})
+
+            chart_sheet.set_chart(chart)
+
+        elif sheet_name == 'SubCategoria2_last_date':
+            chart_sheet = workbook.add_chartsheet('GRAPH13')
+            chart_sheet.set_tab_color('#32CD32')
+            chart = workbook.add_chart({'type': 'column'})
+            # Adiciona a série com valores e cores
+            chart.add_series({
+                'name': 'Subcategorias_2',
+                'categories': [sheet_name, 1, 0, len(df), 0],
+                'values': [sheet_name, 1, 1, len(df), 1],
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+                'fill': {'color': '#4783ba'},  # Cor azul
+                'gap': 50
+            })
+
+            chart.set_title({
+                                'name': f'{titulo_grafico} \nTotal de manifestações por tipo de Subcategorias - 10 Principais manifestações \n{data_fim_formatada}',
                                 'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}})
 
             chart.set_x_axis({'major_gridlines': {'visible': False},

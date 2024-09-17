@@ -718,3 +718,53 @@ ORDER BY Total DESC;
         infra_sql.close_connection()
 
         return df
+
+    @classmethod
+    def chart_columns_Subnvl2(cls, escopo, data_inicio, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+        data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_inicio = data_inicio.replace(day=1)
+        data_fim = data_fim.replace(day=1)
+
+        query = '''SELECT TOP 10 ISNULL(SubCategoria_Nivel2, 'EM GERAL') AS Subcategoria_nvl2, COUNT(*) AS Total
+FROM escopo_{}
+WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ?
+GROUP BY ISNULL(SubCategoria_Nivel2, 'EM GERAL')
+ORDER BY Total DESC;'''.format(escopo)
+
+        database_cursor.execute(query, (data_inicio, data_fim))
+        results = database_cursor.fetchall()
+
+        df_data = [(row[0], row[1]) for row in results]
+        df = pd.DataFrame(df_data, columns=['Subcategoria_nvl2', 'Total'])
+
+        infra_sql.close_connection()
+
+        return df
+
+    @classmethod
+    def chart_columns_Subnvl2_last_date(cls, escopo,  data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_fim = data_fim.replace(day=1)
+
+        query = '''SELECT TOP 10 ISNULL(SubCategoria_Nivel2, 'EM GERAL') AS Subcategoria_nvl2, COUNT(*) AS Total
+    FROM escopo_{}
+    WHERE CONVERT(date, Mes_ano) = ?
+    GROUP BY ISNULL(SubCategoria_Nivel2, 'EM GERAL')
+    ORDER BY Total DESC;'''.format(escopo)
+
+        database_cursor.execute(query, (data_fim))
+        results = database_cursor.fetchall()
+
+        df_data = [(row[0], row[1]) for row in results]
+        df = pd.DataFrame(df_data, columns=['Subcategoria_nvl2', 'Total'])
+
+        infra_sql.close_connection()
+
+        return df
