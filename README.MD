@@ -20,6 +20,12 @@ Quando o "Main.py" é executado, a interface irá apresentar Inputs de Escopos (
 
 (Por Optativa, uma pasta é criada no Desktop para armazernar o .XLSX com os graficos.)
 
+CONEXÃO
+-
+As configs de conexão com o servidor é feita passando as str de conexão no arquivo .env
+(Banco de dados utilizado: Azure Cloud SQL)
+
+
 Requirements
 -
 et-xmlfile==1.1.0
