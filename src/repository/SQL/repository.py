@@ -768,3 +768,119 @@ ORDER BY Total DESC;'''.format(escopo)
         infra_sql.close_connection()
 
         return df
+
+
+    @classmethod
+    def chart_columns_line_top10_all(cls, escopo, data_inicio, data_fim):
+            infra_sql = InfrastructureSQL()
+            infra_sql.connect()
+            database_cursor = infra_sql.cursor_db()
+            data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
+            data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+            data_inicio = data_inicio.replace(day=1)
+            data_fim = data_fim.replace(day=1)
+
+            query = '''WITH CTE AS (
+        SELECT 
+            LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia) AS ocorrencia,
+            COUNT(*) AS quantidade
+        FROM Escopo_{}
+        WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ? 
+        GROUP BY 
+            Tipo_de_ocorrencia + ' - ' + ocorrencia
+    ),
+    Top10 AS (
+        SELECT 
+            ocorrencia,
+            quantidade,
+            0 AS sort_order
+        FROM CTE
+        ORDER BY quantidade DESC
+        OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+    ),
+    Remaining AS (
+        SELECT 
+            'Manifestações em menor volume' AS ocorrencia,
+            SUM(quantidade) AS quantidade,
+            1 AS sort_order
+        FROM CTE
+        WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
+    ),
+    FinalResult AS (
+        SELECT ocorrencia, quantidade, sort_order FROM Top10
+        UNION ALL
+        SELECT ocorrencia, quantidade, sort_order FROM Remaining
+    )
+    SELECT ocorrencia, quantidade
+    FROM FinalResult
+    ORDER BY sort_order, quantidade DESC;
+
+            '''.format(escopo)
+
+            database_cursor.execute(query, (data_inicio, data_fim))
+            results = database_cursor.fetchall()
+
+            df_data = [(row[0], row[1]) for row in results]
+            df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
+
+            infra_sql.close_connection()
+
+            return df
+
+    @classmethod
+    def chart_columns_line_top10_all_last_date(cls, escopo, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_fim = data_fim.replace(day=1)
+
+        query = '''WITH CTE AS (
+            SELECT 
+                LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia) AS ocorrencia,
+                COUNT(*) AS quantidade
+            FROM Escopo_{}
+            WHERE CONVERT(date, Mes_ano) = ? 
+            GROUP BY 
+                Tipo_de_ocorrencia + ' - ' + ocorrencia
+        ),
+        Top10 AS (
+            SELECT 
+                ocorrencia,
+                quantidade,
+                0 AS sort_order
+            FROM CTE
+            ORDER BY quantidade DESC
+            OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+        ),
+        Remaining AS (
+            SELECT 
+                'Manifestações em menor volume' AS ocorrencia,
+                SUM(quantidade) AS quantidade,
+                1 AS sort_order
+            FROM CTE
+            WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
+        ),
+        FinalResult AS (
+            SELECT ocorrencia, quantidade, sort_order FROM Top10
+            UNION ALL
+            SELECT ocorrencia, quantidade, sort_order FROM Remaining
+        )
+        SELECT ocorrencia, quantidade
+        FROM FinalResult
+        ORDER BY sort_order, quantidade DESC;
+
+                '''.format(escopo)
+
+        database_cursor.execute(query, (data_fim))
+        results = database_cursor.fetchall()
+
+        df_data = [(row[0], row[1]) for row in results]
+        df = pd.DataFrame(df_data, columns=['Tipo_de_ocorrencia', 'Total'])
+
+        infra_sql.close_connection()
+
+        return df
+
+
+

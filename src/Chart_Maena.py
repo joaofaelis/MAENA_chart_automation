@@ -297,6 +297,49 @@ def run_code():
     df_per_categoria_final_date['Subcategoria'] = df_per_categoria_final_date['Subcategoria'].str.title()
     df_per_categoria_final_date = df_per_categoria_final_date.fillna(0)
 
+    df_top_10_all = SQLRepository.chart_columns_line_top10_all(escopo, data_inicio, data_fim)
+    df_top_10_all['Tipo_de_ocorrencia'] = df_top_10_all['Tipo_de_ocorrencia'].str.title()
+    total_df_top_10_all = int(df_top_10_all['Total'].sum())
+    # Ordenar o DataFrame pela coluna 'Total' em ordem decrescente
+    df_top_10_all = df_top_10_all.sort_values(by='Total', ascending=False)
+    # Separar a categoria "Manifestações Em Menor Volume"
+    menor_volume_df_top_10_all = df_top_10_all[df_top_10_all['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto_df_top_10_all = df_top_10_all[df_top_10_all['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    # Concatenar as partes, garantindo que "Manifestações Em Menor Volume" fique no final
+    df_top_10_all = pd.concat([resto_df_top_10_all, menor_volume_df_top_10_all])
+    # Calcular a coluna '% Acumulado'
+    df_top_10_all['% Acumulado'] = df_top_10_all['Total'] / total_df_top_10_all
+    df_top_10_all['% Acumulado'] = df_top_10_all['% Acumulado'].cumsum()
+    df_top_10_all.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_top_10_all['Total'] = pd.to_numeric(df_top_10_all['Total'], errors='coerce')
+    df_top_10_all['% Acumulado'] = pd.to_numeric(df_top_10_all['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_top_10_all = df_top_10_all.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_top_10_all.reset_index(drop=True, inplace=True)
+
+    df_top_10_all_last = SQLRepository.chart_columns_line_top10_all_last_date(escopo, data_fim)
+    df_top_10_all_last['Tipo_de_ocorrencia'] = df_top_10_all_last['Tipo_de_ocorrencia'].str.title()
+    total_df_top_10_all_last = int(df_top_10_all_last['Total'].sum())
+    # Ordenar o DataFrame pela coluna 'Total' em ordem decrescente
+    df_top_10_all_last = df_top_10_all_last.sort_values(by='Total', ascending=False)
+    # Separar a categoria "Manifestações Em Menor Volume"
+    menor_volume_df_top_10_all_last = df_top_10_all_last[df_top_10_all_last['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
+    resto_df_top_10_all_last = df_top_10_all_last[df_top_10_all_last['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
+    # Concatenar as partes, garantindo que "Manifestações Em Menor Volume" fique no final
+    df_top_10_all_last = pd.concat([resto_df_top_10_all_last, menor_volume_df_top_10_all_last])
+    # Calcular a coluna '% Acumulado'
+    df_top_10_all_last['% Acumulado'] = df_top_10_all_last['Total'] / total_df_top_10_all_last
+    df_top_10_all_last['% Acumulado'] = df_top_10_all_last['% Acumulado'].cumsum()
+    df_top_10_all_last.replace('#NÚM!', np.nan, inplace=True)
+    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_top_10_all_last['Total'] = pd.to_numeric(df_top_10_all_last['Total'], errors='coerce')
+    df_top_10_all_last['% Acumulado'] = pd.to_numeric(df_top_10_all_last['% Acumulado'], errors='coerce')
+    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
+    df_top_10_all_last = df_top_10_all_last.dropna(subset=['Total', '% Acumulado'])
+    # Se você deseja resetar o índice após a exclusão das linhas
+    df_top_10_all_last.reset_index(drop=True, inplace=True)
 
 
     desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
@@ -352,6 +395,11 @@ def run_code():
             df_colunms_sub2.to_excel(writer, sheet_name='SubCategoria2', index=False)
         if not df_colunms_sub2_last_date.empty:
             df_colunms_sub2_last_date.to_excel(writer, sheet_name='SubCategoria2_last_date', index=False)
+        if not df_top_10_all.empty:
+            df_top_10_all.to_excel(writer, sheet_name='Pareto_top_10_todos', index=False)
+        if not df_top_10_all_last.empty:
+            df_top_10_all_last.to_excel(writer, sheet_name='Pareto_top_10_todos_last_date', index=False)
+
 
     dataframe_original = pd.read_excel(output_file_path, sheet_name=None)
     workbook = xlsxwriter.Workbook(file_path, {'nan_inf_to_errors': True})
@@ -899,6 +947,282 @@ def run_code():
                               'major_gridlines': {'visible': False}})
 
             chart.set_legend({'position': 'none'})
+
+            chart_sheet.set_chart(chart)
+
+
+
+        elif sheet_name == 'Pareto_top_10_todos':
+
+            chart_sheet = workbook.add_chartsheet('GRAPH14')
+
+            chart_sheet.set_tab_color('#32CD32')
+
+            chart = workbook.add_chart({'type': 'column'})
+
+            # Definindo cores para as categorias antes do hífen
+
+            cores = {
+
+                'Redes Sociais': '#008080',
+
+                'Reclamação': '#FF0000',
+
+                'Elogio': '#70AD47',
+
+                'Solicitação': '#F4A460',
+
+                'Informação': '#5B9BD5',
+
+                'Manifestações Em Menor Volume': '#4F4F4F',
+
+                'Crítica': '#FFD700',
+
+                'Sugestão': '#FF66FF'
+
+            }
+
+            categorias = df_top_10_all['Tipo_de_ocorrencia'].tolist()  # Usar df_top10_all para categorias
+
+            cores_pontos = [{'fill': {'color': cores.get(categoria.split(' - ')[0], '#4F4F4F')}} for categoria in
+                            categorias]
+
+            # Adicionar a série com valores e cores
+
+            chart.add_series({
+
+                'name': 'Manifestações',
+
+                'categories': [sheet_name, 1, 0, len(categorias), 0],
+
+                'values': [sheet_name, 1, 1, len(categorias), 1],
+
+                'points': cores_pontos,
+
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+
+                'gap': 50
+
+            })
+
+            # Definir valor máximo do eixo Y para o gráfico de colunas
+
+            chart.set_y_axis({
+
+                'min': 0,
+
+                'max': total_df_top_10_all,
+
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+
+                'num_font': {'color': 'white'},
+
+                'line': {'none': True}
+
+            })
+
+            # Configurações do gráfico
+
+            chart.set_title({
+
+                'name': f'{titulo_grafico} \n10 principais manifestações\n{total_df_top_10_all} manifestações - {data_inicio_formatada} - {data_fim_formatada}',
+
+                'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}
+
+            })
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_x_axis({
+
+                'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -45, 'color': '#404040'},
+
+                'major_gridlines': {'visible': False},
+
+                'line': {'none': True}
+
+            })
+
+            # Gráfico de linha para % Acumulado
+
+            line_chart = workbook.add_chart({'type': 'line'})
+
+            line_chart.add_series({
+
+                'name': '% Acumulado',
+
+                'categories': [sheet_name, 1, 0, df_top_10_all.shape[0], 0],
+
+                'values': [sheet_name, 1, 2, df_top_10_all.shape[0], 2],
+
+                'line': {'color': '#404040', 'width': 1.25},
+
+                'y2_axis': True,
+
+            })
+
+            line_chart.set_y2_axis({
+
+                'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
+
+                'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
+
+                'num_format': '0%',
+
+                'max': 1,
+
+                'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False, 'color': '#404040'},
+
+                'line': {'none': True}
+
+            })
+
+            # Combinar os gráficos de colunas e linha
+
+            chart.combine(line_chart)
+
+            chart_sheet.set_chart(chart)
+
+        elif sheet_name == 'Pareto_top_10_todos_last_date':
+
+            chart_sheet = workbook.add_chartsheet('GRAPH15')
+
+            chart_sheet.set_tab_color('#32CD32')
+
+            chart = workbook.add_chart({'type': 'column'})
+
+            # Definindo cores para as categorias antes do hífen
+
+            cores = {
+
+                'Redes Sociais': '#008080',
+
+                'Reclamação': '#FF0000',
+
+                'Elogio': '#70AD47',
+
+                'Solicitação': '#F4A460',
+
+                'Informação': '#5B9BD5',
+
+                'Manifestações Em Menor Volume': '#4F4F4F',
+
+                'Crítica': '#FFD700',
+
+                'Sugestão': '#FF66FF'
+
+            }
+
+            categorias = df_top_10_all['Tipo_de_ocorrencia'].tolist()  # Usar df_top10_all para categorias
+
+            cores_pontos = [{'fill': {'color': cores.get(categoria.split(' - ')[0], '#4F4F4F')}} for categoria in
+                            categorias]
+
+            # Adicionar a série com valores e cores
+
+            chart.add_series({
+
+                'name': 'Manifestações',
+
+                'categories': [sheet_name, 1, 0, len(categorias), 0],
+
+                'values': [sheet_name, 1, 1, len(categorias), 1],
+
+                'points': cores_pontos,
+
+                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+
+                'gap': 50
+
+            })
+
+            # Definir valor máximo do eixo Y para o gráfico de colunas
+
+            chart.set_y_axis({
+
+                'min': 0,
+
+                'max': total_df_top_10_all_last,
+
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+
+                'num_font': {'color': 'white'},
+
+                'line': {'none': True}
+
+            })
+
+            # Configurações do gráfico
+
+            chart.set_title({
+
+                'name': f'{titulo_grafico} \n10 principais manifestações\n{total_df_top_10_all_last} manifestações - {data_fim_formatada}',
+
+                'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}
+
+            })
+
+            chart.set_legend({'position': 'bottom',
+                              'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False,
+                                       'color': '#404040'}})
+
+            chart.set_x_axis({
+
+                'num_font': {'name': 'Segoe UI', 'size': 12, 'rotation': -45, 'color': '#404040'},
+
+                'major_gridlines': {'visible': False},
+
+                'line': {'none': True}
+
+            })
+
+            # Gráfico de linha para % Acumulado
+
+            line_chart = workbook.add_chart({'type': 'line'})
+
+            line_chart.add_series({
+
+                'name': '% Acumulado',
+
+                'categories': [sheet_name, 1, 0, df_top_10_all_last.shape[0], 0],
+
+                'values': [sheet_name, 1, 2, df_top_10_all_last.shape[0], 2],
+
+                'line': {'color': '#404040', 'width': 1.25},
+
+                'y2_axis': True,
+
+            })
+
+            line_chart.set_y2_axis({
+
+                'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
+
+                'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
+
+                'num_format': '0%',
+
+                'max': 1,
+
+                'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False, 'color': '#404040'},
+
+                'line': {'none': True}
+
+            })
+
+            # Combinar os gráficos de colunas e linha
+
+            chart.combine(line_chart)
 
             chart_sheet.set_chart(chart)
 
