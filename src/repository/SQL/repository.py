@@ -883,4 +883,325 @@ ORDER BY Total DESC;'''.format(escopo)
         return df
 
 
+    @classmethod
+    def tabela_subcategoria_nvl2(cls, escopo, data_inicio, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+
+        # Convertendo as datas para o formato adequado
+        data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_inicio = data_inicio.replace(day=1)
+        data_fim = data_fim.replace(day=1)
+
+        # Formatando as datas no formato 'YYYY-MM-DD' para inserção na query
+        data_inicio_str = data_inicio.strftime('%Y-%m-%d')
+        data_fim_str = data_fim.strftime('%Y-%m-%d')
+
+        # Query dinâmica
+        query = f'''
+               DECLARE @cols AS NVARCHAR(MAX),
+                       @sumCols AS NVARCHAR(MAX),
+                       @query AS NVARCHAR(MAX);
+
+               -- Obter a lista de SubCategoria_Nivel2 distintas
+               SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
+               WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
+               FROM (SELECT DISTINCT SubCategoria_Nivel2
+                     FROM Escopo_{escopo}
+                     WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+
+               -- Construir a lista de colunas para a soma total de manifestações
+               SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
+               FROM (SELECT DISTINCT SubCategoria_Nivel2
+                     FROM Escopo_{escopo}
+                     WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+
+               -- Construir a consulta dinâmica PIVOT
+               SET @query = '
+               SELECT Ocorrencia, ' + @cols + '
+               FROM (
+                   SELECT 
+                       Ocorrencia,
+                       SubCategoria_Nivel2,
+                       COUNT(*) AS Total_Manifestacoes
+                   FROM 
+                       Escopo_{escopo}
+                   WHERE 
+                       Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+                       AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
+                   GROUP BY 
+                       Ocorrencia,
+                       SubCategoria_Nivel2
+               ) AS SourceTable
+               PIVOT (
+                   SUM(Total_Manifestacoes)
+                   FOR SubCategoria_Nivel2 IN (' + @cols + ')
+               ) AS PivotTable';
+
+               -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+               SET @query = '
+               SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+                    FROM (' + @query + ') AS FinalResult 
+                    ORDER BY Total_Manifestacoes DESC';
+
+               -- Executar a consulta dinâmica
+               EXEC sp_executesql @query;
+           '''
+
+        # Executando a query e pegando o resultado
+        database_cursor.execute(query)
+        rows = database_cursor.fetchall()
+        columns = [column[0] for column in database_cursor.description]
+
+        # Substituir valores None por 0 nos dados antes de criar o DataFrame
+        rows = [[0 if item is None else item for item in row] for row in rows]
+
+        # Convertendo o resultado para um DataFrame do pandas
+        df = pd.DataFrame(rows, columns=columns)
+
+        # Fechar a conexão
+        infra_sql.close_connection()
+
+        return df
+
+    @classmethod
+    def tabela_subcategoria_nvl2_last_date(cls, escopo, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_fim = data_fim.replace(day=1)
+        data_fim_str = data_fim.strftime('%Y-%m-%d')
+
+        # Query dinâmica
+        query = f'''
+              DECLARE @cols AS NVARCHAR(MAX),
+                      @sumCols AS NVARCHAR(MAX),
+                      @query AS NVARCHAR(MAX);
+
+              -- Obter a lista de SubCategoria_Nivel2 distintas
+              SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
+              WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
+              FROM (SELECT DISTINCT SubCategoria_Nivel2
+                    FROM Escopo_{escopo}
+                    WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+
+              -- Construir a lista de colunas para a soma total de manifestações
+              SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
+              FROM (SELECT DISTINCT SubCategoria_Nivel2
+                    FROM Escopo_{escopo}
+                    WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+
+              -- Construir a consulta dinâmica PIVOT
+              SET @query = '
+              SELECT Ocorrencia, ' + @cols + '
+              FROM (
+                  SELECT 
+                      Ocorrencia,
+                      SubCategoria_Nivel2,
+                      COUNT(*) AS Total_Manifestacoes
+                  FROM 
+                      Escopo_{escopo}
+                  WHERE 
+                      Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+                      AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
+                  GROUP BY 
+                      Ocorrencia,
+                      SubCategoria_Nivel2
+              ) AS SourceTable
+              PIVOT (
+                  SUM(Total_Manifestacoes)
+                  FOR SubCategoria_Nivel2 IN (' + @cols + ')
+              ) AS PivotTable';
+
+              -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+              SET @query = '
+              SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+                   FROM (' + @query + ') AS FinalResult 
+                   ORDER BY Total_Manifestacoes DESC';
+
+              -- Executar a consulta dinâmica
+              EXEC sp_executesql @query;
+          '''
+
+        # Executando a query e pegando o resultado
+        database_cursor.execute(query)
+        rows = database_cursor.fetchall()
+        columns = [column[0] for column in database_cursor.description]
+
+        # Substituir valores None por 0 nos dados antes de criar o DataFrame
+        rows = [[0 if item is None else item for item in row] for row in rows]
+
+        # Convertendo o resultado para um DataFrame do pandas
+        df = pd.DataFrame(rows, columns=columns)
+
+        # Fechar a conexão
+        infra_sql.close_connection()
+
+        return df
+
+    @classmethod
+    def tabela_marca_maena(cls, escopo, data_inicio, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+
+        # Convertendo as datas para o formato adequado
+        data_inicio = datetime.strptime(data_inicio, '%Y-%m').date()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_inicio = data_inicio.replace(day=1)
+        data_fim = data_fim.replace(day=1)
+
+        # Formatando as datas no formato 'YYYY-MM-DD' para inserção na query
+        data_inicio_str = data_inicio.strftime('%Y-%m-%d')
+        data_fim_str = data_fim.strftime('%Y-%m-%d')
+
+        # Query dinâmica
+        query = f'''
+                DECLARE @cols AS NVARCHAR(MAX),
+                        @sumCols AS NVARCHAR(MAX),
+                        @query AS NVARCHAR(MAX);
+
+                -- Obter a lista de SubCategoria_Nivel2 distintas
+                SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
+                WITHIN GROUP (ORDER BY Marca_Maena)
+                FROM (SELECT DISTINCT Marca_Maena
+                      FROM Escopo_{escopo}
+                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+
+                -- Construir a lista de colunas para a soma total de manifestações
+                SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
+                FROM (SELECT DISTINCT Marca_Maena
+                      FROM Escopo_{escopo}
+                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+
+                -- Construir a consulta dinâmica PIVOT
+                SET @query = '
+                SELECT Ocorrencia, ' + @cols + '
+                FROM (
+                    SELECT 
+                        Ocorrencia,
+                        Marca_Maena,
+                        COUNT(*) AS Total_Manifestacoes
+                    FROM 
+                        Escopo_{escopo}
+                    WHERE 
+                        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+                        AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
+                    GROUP BY 
+                        Ocorrencia,
+                        Marca_Maena
+                ) AS SourceTable
+                PIVOT (
+                    SUM(Total_Manifestacoes)
+                    FOR Marca_Maena IN (' + @cols + ')
+                ) AS PivotTable';
+
+                -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+                SET @query = '
+                SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+                     FROM (' + @query + ') AS FinalResult 
+                     ORDER BY Total_Manifestacoes DESC';
+
+                -- Executar a consulta dinâmica
+                EXEC sp_executesql @query;
+            '''
+
+        # Executando a query e pegando o resultado
+        database_cursor.execute(query)
+        rows = database_cursor.fetchall()
+        columns = [column[0] for column in database_cursor.description]
+
+        # Substituir valores None por 0 nos dados antes de criar o DataFrame
+        rows = [[0 if item is None else item for item in row] for row in rows]
+
+        # Convertendo o resultado para um DataFrame do pandas
+        df = pd.DataFrame(rows, columns=columns)
+
+        # Fechar a conexão
+        infra_sql.close_connection()
+
+        return df
+
+    @classmethod
+    def tabela_marca_maena_last_date(cls, escopo, data_fim):
+        infra_sql = InfrastructureSQL()
+        infra_sql.connect()
+        database_cursor = infra_sql.cursor_db()
+        data_fim = datetime.strptime(data_fim, '%Y-%m').date()
+        data_fim = data_fim.replace(day=1)
+        data_fim_str = data_fim.strftime('%Y-%m-%d')
+
+        # Query dinâmica
+        query = f'''
+                DECLARE @cols AS NVARCHAR(MAX),
+                        @sumCols AS NVARCHAR(MAX),
+                        @query AS NVARCHAR(MAX);
+
+                -- Obter a lista de SubCategoria_Nivel2 distintas
+                SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
+                WITHIN GROUP (ORDER BY Marca_Maena)
+                FROM (SELECT DISTINCT Marca_Maena
+                      FROM Escopo_{escopo}
+                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+
+                -- Construir a lista de colunas para a soma total de manifestações
+                SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
+                FROM (SELECT DISTINCT Marca_Maena
+                      FROM Escopo_{escopo}
+                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+
+                -- Construir a consulta dinâmica PIVOT
+                SET @query = '
+                SELECT Ocorrencia, ' + @cols + '
+                FROM (
+                    SELECT 
+                        Ocorrencia,
+                        Marca_Maena,
+                        COUNT(*) AS Total_Manifestacoes
+                    FROM 
+                        Escopo_{escopo}
+                    WHERE 
+                        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+                        AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
+                    GROUP BY 
+                        Ocorrencia,
+                        Marca_Maena
+                ) AS SourceTable
+                PIVOT (
+                    SUM(Total_Manifestacoes)
+                    FOR Marca_Maena IN (' + @cols + ')
+                ) AS PivotTable';
+
+                -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+                SET @query = '
+                SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+                     FROM (' + @query + ') AS FinalResult 
+                     ORDER BY Total_Manifestacoes DESC';
+
+                -- Executar a consulta dinâmica
+                EXEC sp_executesql @query;
+            '''
+
+        # Executando a query e pegando o resultado
+        database_cursor.execute(query)
+        rows = database_cursor.fetchall()
+        columns = [column[0] for column in database_cursor.description]
+
+        # Substituir valores None por 0 nos dados antes de criar o DataFrame
+        rows = [[0 if item is None else item for item in row] for row in rows]
+
+        # Convertendo o resultado para um DataFrame do pandas
+        df = pd.DataFrame(rows, columns=columns)
+
+        # Fechar a conexão
+        infra_sql.close_connection()
+
+        return df
+
+
+
 

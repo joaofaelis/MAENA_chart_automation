@@ -341,6 +341,15 @@ def run_code():
     # Se você deseja resetar o índice após a exclusão das linhas
     df_top_10_all_last.reset_index(drop=True, inplace=True)
 
+    df_subcategoria_2 = SQLRepository.tabela_subcategoria_nvl2(escopo, data_inicio, data_fim)
+    df_subcategoria_2_last_date = SQLRepository.tabela_subcategoria_nvl2_last_date(escopo, data_fim)
+    df_marca_maena = SQLRepository.tabela_marca_maena(escopo, data_inicio, data_fim)
+    df_marca_maena_last_date = SQLRepository.tabela_marca_maena_last_date(escopo, data_fim)
+
+
+
+
+
 
     desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
     if not os.path.exists(desktop_path):  # Caso o usuário não esteja no Windows
@@ -399,6 +408,14 @@ def run_code():
             df_top_10_all.to_excel(writer, sheet_name='Pareto_top_10_todos', index=False)
         if not df_top_10_all_last.empty:
             df_top_10_all_last.to_excel(writer, sheet_name='Pareto_top_10_todos_last_date', index=False)
+        if not df_subcategoria_2.empty:
+            df_subcategoria_2.to_excel(writer, sheet_name='Tabela Subcategoria_2', index=False)
+        if not df_subcategoria_2_last_date.empty:
+            df_subcategoria_2_last_date.to_excel(writer, sheet_name='Subcategoria_2 ultimo mes', index=False)
+        if not df_marca_maena.empty:
+            df_marca_maena.to_excel(writer, sheet_name='Tabela Marca_Maena', index=False )
+        if not df_marca_maena_last_date.empty:
+            df_marca_maena_last_date.to_excel(writer, sheet_name='Marca_Maena ultimo mes', index=False)
 
 
     dataframe_original = pd.read_excel(output_file_path, sheet_name=None)
