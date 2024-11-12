@@ -506,46 +506,69 @@ ORDER BY sort_order, quantidade DESC;
 
         query = f"""
                            DECLARE @cols AS NVARCHAR(MAX),
-                           @query AS NVARCHAR(MAX);
+        @query AS NVARCHAR(MAX);
 
-                           -- Obter a lista de marcas distintas, substituindo "EM GERAL" por "Não identificada"
-                           SELECT @cols = STRING_AGG(QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
-                           WITHIN GROUP (ORDER BY CASE WHEN Marca_MAENA = 'EM GERAL' THEN 1 ELSE 0 END)
-                           FROM (SELECT DISTINCT Marca_MAENA
-                                 FROM Escopo_{escopo}
-                                 WHERE Marca_MAENA IS NOT NULL) AS tmp;
+-- Obter a lista de marcas distintas, incluindo 'SEM MARCA' para valores nulos
+SELECT @cols = STRING_AGG(QUOTENAME(CASE 
+                                       WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                       WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                       ELSE Marca_MAENA 
+                                    END), ', ')
+WITHIN GROUP (ORDER BY 
+              CASE 
+                  WHEN Marca_MAENA IS NULL THEN 2 
+                  WHEN Marca_MAENA = 'EM GERAL' THEN 1 
+                  ELSE 0 
+              END)
+FROM (SELECT DISTINCT Marca_MAENA
+      FROM Escopo_{escopo}) AS tmp;
 
-                           -- Construir a consulta dinâmica PIVOT
-                           SET @query = '
-                           SELECT SubCategoria, ' + @cols + ' 
-                           FROM (
-                               SELECT 
-                                   COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
-                                   CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END AS Marca,
-                                   COUNT(*) AS Total_Manifestacoes
-                               FROM 
-                                   Escopo_{escopo}
-                               WHERE 
-                                   CONVERT(date, Mes_ano) BETWEEN ''{data_inicio}'' AND ''{data_fim}''
-                               GROUP BY 
-                                   COALESCE(SubCategoria_nivel1, ''geral''),
-                                   CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END
-                           ) AS SourceTable
-                           PIVOT (
-                               SUM(Total_Manifestacoes)
-                               FOR Marca IN (' + @cols + ')
-                           ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT SubCategoria, ' + @cols + ' 
+FROM (
+    SELECT 
+        COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
+        COALESCE(CASE 
+                    WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' 
+                    ELSE Marca_MAENA 
+                 END, ''SEM MARCA'') AS Marca,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        CONVERT(date, Mes_ano) BETWEEN ''{data_inicio}'' AND ''{data_fim}''
+    GROUP BY 
+        COALESCE(SubCategoria_nivel1, ''geral''),
+        COALESCE(CASE 
+                    WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' 
+                    ELSE Marca_MAENA 
+                 END, ''SEM MARCA'')
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR Marca IN (' + @cols + ')
+) AS PivotTable';
 
-                           -- Adicionar a substituição de NULL por 0 na seleção final
-                          SET @query = 'SELECT SubCategoria, ' + 
-                     (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END) + ', 0) AS ' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
-                      FROM (SELECT DISTINCT Marca_MAENA
-                            FROM Escopo_{escopo}
-                            WHERE Marca_MAENA IS NOT NULL) AS tmp)
-                     + ' FROM (' + @query + ') AS FinalResult ORDER BY SubCategoria ASC';
+-- Adicionar a substituição de NULL por 0 na seleção final
+SET @query = 'SELECT SubCategoria, ' + 
+             (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE 
+                                                        WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                                        WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                                        ELSE Marca_MAENA 
+                                                     END) + ', 0) AS ' + 
+                                             QUOTENAME(CASE 
+                                                        WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                                        WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                                        ELSE Marca_MAENA 
+                                                     END), ', ')
+              FROM (SELECT DISTINCT Marca_MAENA
+                    FROM Escopo_{escopo}) AS tmp)
+             + ' FROM (' + @query + ') AS FinalResult ORDER BY SubCategoria ASC';
 
-                           -- Executar a consulta dinâmica
-                           EXEC sp_executesql @query;
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query;
+
                        """
 
         database_cursor.execute(query)
@@ -574,47 +597,70 @@ ORDER BY sort_order, quantidade DESC;
         data_fim = data_fim.replace(day=1)
 
         query = f"""
-                   DECLARE @cols AS NVARCHAR(MAX),
-                   @query AS NVARCHAR(MAX);
+                  DECLARE @cols AS NVARCHAR(MAX),
+        @query AS NVARCHAR(MAX);
 
-                   -- Obter a lista de marcas distintas, substituindo "EM GERAL" por "Não identificada"
-                   SELECT @cols = STRING_AGG(QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
-                   WITHIN GROUP (ORDER BY CASE WHEN Marca_MAENA = 'EM GERAL' THEN 1 ELSE 0 END)
-                   FROM (SELECT DISTINCT Marca_MAENA
-                         FROM Escopo_{escopo}
-                         WHERE Marca_MAENA IS NOT NULL) AS tmp;
+-- Obter a lista de marcas distintas, incluindo 'SEM MARCA' para valores nulos
+SELECT @cols = STRING_AGG(QUOTENAME(CASE 
+                                       WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                       WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                       ELSE Marca_MAENA 
+                                    END), ', ')
+WITHIN GROUP (ORDER BY 
+              CASE 
+                  WHEN Marca_MAENA IS NULL THEN 2 
+                  WHEN Marca_MAENA = 'EM GERAL' THEN 1 
+                  ELSE 0 
+              END)
+FROM (SELECT DISTINCT Marca_MAENA
+      FROM Escopo_{escopo}) AS tmp;
 
-                   -- Construir a consulta dinâmica PIVOT
-                   SET @query = '
-                   SELECT SubCategoria, ' + @cols + ' 
-                   FROM (
-                       SELECT 
-                           COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
-                           CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END AS Marca,
-                           COUNT(*) AS Total_Manifestacoes
-                       FROM 
-                           Escopo_{escopo}
-                       WHERE 
-                           CONVERT(date, Mes_ano) = ''{data_fim}''
-                       GROUP BY 
-                           COALESCE(SubCategoria_nivel1, ''geral''),
-                           CASE WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' ELSE Marca_MAENA END
-                   ) AS SourceTable
-                   PIVOT (
-                       SUM(Total_Manifestacoes)
-                       FOR Marca IN (' + @cols + ')
-                   ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT SubCategoria, ' + @cols + ' 
+FROM (
+    SELECT 
+        COALESCE(SubCategoria_nivel1, ''geral'') AS SubCategoria,
+        COALESCE(CASE 
+                    WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' 
+                    ELSE Marca_MAENA 
+                 END, ''SEM MARCA'') AS Marca,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        CONVERT(date, Mes_ano) = ''{data_fim}''
+    GROUP BY 
+        COALESCE(SubCategoria_nivel1, ''geral''),
+        COALESCE(CASE 
+                    WHEN Marca_MAENA = ''EM GERAL'' THEN ''Não identificada'' 
+                    ELSE Marca_MAENA 
+                 END, ''SEM MARCA'')
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR Marca IN (' + @cols + ')
+) AS PivotTable';
 
-                   -- Adicionar a substituição de NULL por 0 na seleção final
-                  SET @query = 'SELECT SubCategoria, ' + 
-             (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END) + ', 0) AS ' + QUOTENAME(CASE WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' ELSE Marca_MAENA END), ', ')
+-- Adicionar a substituição de NULL por 0 na seleção final
+SET @query = 'SELECT SubCategoria, ' + 
+             (SELECT STRING_AGG('ISNULL(' + QUOTENAME(CASE 
+                                                        WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                                        WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                                        ELSE Marca_MAENA 
+                                                     END) + ', 0) AS ' + 
+                                             QUOTENAME(CASE 
+                                                        WHEN Marca_MAENA IS NULL THEN 'SEM MARCA'
+                                                        WHEN Marca_MAENA = 'EM GERAL' THEN 'Não identificada' 
+                                                        ELSE Marca_MAENA 
+                                                     END), ', ')
               FROM (SELECT DISTINCT Marca_MAENA
-                    FROM Escopo_{escopo}
-                    WHERE Marca_MAENA IS NOT NULL) AS tmp)
+                    FROM Escopo_{escopo}) AS tmp)
              + ' FROM (' + @query + ') AS FinalResult ORDER BY SubCategoria ASC';
 
-                   -- Executar a consulta dinâmica
-                   EXEC sp_executesql @query;
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query;
+
                """
 
         database_cursor.execute(query)
@@ -642,7 +688,6 @@ ORDER BY sort_order, quantidade DESC;
             data_fim = datetime.strptime(data_fim, '%Y-%m').date()
             data_inicio = data_inicio.replace(day=1)
             data_fim = data_fim.replace(day=1)
-
             query = '''SELECT TOP 10
     CASE
         WHEN Linha_Maena IS NULL AND Variante_Maena IS NULL THEN 'CORTES EM GERAL'
@@ -781,39 +826,48 @@ ORDER BY Total DESC;'''.format(escopo)
             data_fim = data_fim.replace(day=1)
 
             query = '''WITH CTE AS (
-        SELECT 
-            LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia) AS ocorrencia,
-            COUNT(*) AS quantidade
-        FROM Escopo_{}
-        WHERE CONVERT(date, Mes_ano) BETWEEN ? AND ? 
-        GROUP BY 
-            Tipo_de_ocorrencia + ' - ' + ocorrencia
-    ),
-    Top10 AS (
-        SELECT 
-            ocorrencia,
-            quantidade,
-            0 AS sort_order
-        FROM CTE
-        ORDER BY quantidade DESC
-        OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
-    ),
-    Remaining AS (
-        SELECT 
-            'Manifestações em menor volume' AS ocorrencia,
-            SUM(quantidade) AS quantidade,
-            1 AS sort_order
-        FROM CTE
-        WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
-    ),
-    FinalResult AS (
-        SELECT ocorrencia, quantidade, sort_order FROM Top10
-        UNION ALL
-        SELECT ocorrencia, quantidade, sort_order FROM Remaining
-    )
-    SELECT ocorrencia, quantidade
-    FROM FinalResult
-    ORDER BY sort_order, quantidade DESC;
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+            WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+            ELSE LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia)
+        END AS ocorrencia,
+        COUNT(*) AS quantidade
+    FROM Escopo_{}
+    WHERE Tipo_de_ocorrencia = 'Reclamação'
+      AND CONVERT(date, Mes_ano) BETWEEN ? AND ? 
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+            WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+            ELSE LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia)
+        END
+),
+Top10 AS (
+    SELECT 
+        ocorrencia,
+        quantidade,
+        0 AS sort_order
+    FROM CTE
+    ORDER BY quantidade DESC
+    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+),
+Remaining AS (
+    SELECT 
+        'Manifestações em menor volume' AS ocorrencia,
+        SUM(quantidade) AS quantidade,
+        1 AS sort_order
+    FROM CTE
+    WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
+),
+FinalResult AS (
+    SELECT ocorrencia, quantidade, sort_order FROM Top10
+    UNION ALL
+    SELECT ocorrencia, quantidade, sort_order FROM Remaining
+)
+SELECT ocorrencia, quantidade
+FROM FinalResult
+ORDER BY sort_order, quantidade DESC;
 
             '''.format(escopo)
 
@@ -836,39 +890,48 @@ ORDER BY Total DESC;'''.format(escopo)
         data_fim = data_fim.replace(day=1)
 
         query = '''WITH CTE AS (
-            SELECT 
-                LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia) AS ocorrencia,
-                COUNT(*) AS quantidade
-            FROM Escopo_{}
-            WHERE CONVERT(date, Mes_ano) = ? 
-            GROUP BY 
-                Tipo_de_ocorrencia + ' - ' + ocorrencia
-        ),
-        Top10 AS (
-            SELECT 
-                ocorrencia,
-                quantidade,
-                0 AS sort_order
-            FROM CTE
-            ORDER BY quantidade DESC
-            OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
-        ),
-        Remaining AS (
-            SELECT 
-                'Manifestações em menor volume' AS ocorrencia,
-                SUM(quantidade) AS quantidade,
-                1 AS sort_order
-            FROM CTE
-            WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
-        ),
-        FinalResult AS (
-            SELECT ocorrencia, quantidade, sort_order FROM Top10
-            UNION ALL
-            SELECT ocorrencia, quantidade, sort_order FROM Remaining
-        )
-        SELECT ocorrencia, quantidade
-        FROM FinalResult
-        ORDER BY sort_order, quantidade DESC;
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+            WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+            ELSE LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia)
+        END AS ocorrencia,
+        COUNT(*) AS quantidade
+    FROM Escopo_{}
+    WHERE Tipo_de_ocorrencia = 'Reclamação'
+      AND CONVERT(date, Mes_ano) = ?
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = 'INFESTAÇÃO' THEN 'Infestação'
+            WHEN grupo_de_tipo_de_ocorrencia = 'SABOR/ODOR ALTERADO' THEN 'Sabor/Odor Alterado'
+            ELSE LOWER(Tipo_de_ocorrencia + ' - ' + ocorrencia)
+        END
+),
+Top10 AS (
+    SELECT 
+        ocorrencia,
+        quantidade,
+        0 AS sort_order
+    FROM CTE
+    ORDER BY quantidade DESC
+    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+),
+Remaining AS (
+    SELECT 
+        'Manifestações em menor volume' AS ocorrencia,
+        SUM(quantidade) AS quantidade,
+        1 AS sort_order
+    FROM CTE
+    WHERE ocorrencia NOT IN (SELECT ocorrencia FROM Top10)
+),
+FinalResult AS (
+    SELECT ocorrencia, quantidade, sort_order FROM Top10
+    UNION ALL
+    SELECT ocorrencia, quantidade, sort_order FROM Remaining
+)
+SELECT ocorrencia, quantidade
+FROM FinalResult
+ORDER BY sort_order, quantidade DESC;
 
                 '''.format(escopo)
 
@@ -902,53 +965,60 @@ ORDER BY Total DESC;'''.format(escopo)
         # Query dinâmica
         query = f'''
                DECLARE @cols AS NVARCHAR(MAX),
-                       @sumCols AS NVARCHAR(MAX),
-                       @query AS NVARCHAR(MAX);
+        @sumCols AS NVARCHAR(MAX),
+        @query AS NVARCHAR(MAX);
 
-               -- Obter a lista de SubCategoria_Nivel2 distintas
-               SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
-               WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
-               FROM (SELECT DISTINCT SubCategoria_Nivel2
-                     FROM Escopo_{escopo}
-                     WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+-- Obter a lista de SubCategoria_Nivel2 distintas
+SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
+WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
+FROM (SELECT DISTINCT SubCategoria_Nivel2
+      FROM Escopo_{escopo}
+      WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
 
-               -- Construir a lista de colunas para a soma total de manifestações
-               SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
-               FROM (SELECT DISTINCT SubCategoria_Nivel2
-                     FROM Escopo_{escopo}
-                     WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+-- Construir a lista de colunas para a soma total de manifestações
+SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
+FROM (SELECT DISTINCT SubCategoria_Nivel2
+      FROM Escopo_{escopo}
+      WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
 
-               -- Construir a consulta dinâmica PIVOT
-               SET @query = '
-               SELECT Ocorrencia, ' + @cols + '
-               FROM (
-                   SELECT 
-                       Ocorrencia,
-                       SubCategoria_Nivel2,
-                       COUNT(*) AS Total_Manifestacoes
-                   FROM 
-                       Escopo_{escopo}
-                   WHERE 
-                       Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
-                       AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
-                   GROUP BY 
-                       Ocorrencia,
-                       SubCategoria_Nivel2
-               ) AS SourceTable
-               PIVOT (
-                   SUM(Total_Manifestacoes)
-                   FOR SubCategoria_Nivel2 IN (' + @cols + ')
-               ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT Ocorrencia, ' + @cols + '
+FROM (
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END AS Ocorrencia,
+        SubCategoria_Nivel2,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+        AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END,
+        SubCategoria_Nivel2
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR SubCategoria_Nivel2 IN (' + @cols + ')
+) AS PivotTable';
 
-               -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
-               SET @query = '
-               SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
-                    FROM (' + @query + ') AS FinalResult 
-                    ORDER BY Total_Manifestacoes DESC';
+-- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+SET @query = '
+SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+FROM (' + @query + ') AS FinalResult 
+ORDER BY Total_Manifestacoes DESC';
 
-               -- Executar a consulta dinâmica
-               EXEC sp_executesql @query;
-           '''
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query; '''
 
         # Executando a query e pegando o resultado
         database_cursor.execute(query)
@@ -979,52 +1049,61 @@ ORDER BY Total DESC;'''.format(escopo)
         # Query dinâmica
         query = f'''
               DECLARE @cols AS NVARCHAR(MAX),
-                      @sumCols AS NVARCHAR(MAX),
-                      @query AS NVARCHAR(MAX);
+        @sumCols AS NVARCHAR(MAX),
+        @query AS NVARCHAR(MAX);
 
-              -- Obter a lista de SubCategoria_Nivel2 distintas
-              SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
-              WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
-              FROM (SELECT DISTINCT SubCategoria_Nivel2
-                    FROM Escopo_{escopo}
-                    WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+-- Obter a lista de SubCategoria_Nivel2 distintas
+SELECT @cols = STRING_AGG(QUOTENAME(SubCategoria_Nivel2), ', ')
+WITHIN GROUP (ORDER BY SubCategoria_Nivel2)
+FROM (SELECT DISTINCT SubCategoria_Nivel2
+      FROM Escopo_{escopo}
+      WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
 
-              -- Construir a lista de colunas para a soma total de manifestações
-              SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
-              FROM (SELECT DISTINCT SubCategoria_Nivel2
-                    FROM Escopo_{escopo}
-                    WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
+-- Construir a lista de colunas para a soma total de manifestações
+SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(SubCategoria_Nivel2) + ', 0)', ' + ')
+FROM (SELECT DISTINCT SubCategoria_Nivel2
+      FROM Escopo_{escopo}
+      WHERE SubCategoria_Nivel2 IS NOT NULL) AS tmp;
 
-              -- Construir a consulta dinâmica PIVOT
-              SET @query = '
-              SELECT Ocorrencia, ' + @cols + '
-              FROM (
-                  SELECT 
-                      Ocorrencia,
-                      SubCategoria_Nivel2,
-                      COUNT(*) AS Total_Manifestacoes
-                  FROM 
-                      Escopo_{escopo}
-                  WHERE 
-                      Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
-                      AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
-                  GROUP BY 
-                      Ocorrencia,
-                      SubCategoria_Nivel2
-              ) AS SourceTable
-              PIVOT (
-                  SUM(Total_Manifestacoes)
-                  FOR SubCategoria_Nivel2 IN (' + @cols + ')
-              ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT Ocorrencia, ' + @cols + '
+FROM (
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END AS Ocorrencia,
+        SubCategoria_Nivel2,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+        AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END,
+        SubCategoria_Nivel2
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR SubCategoria_Nivel2 IN (' + @cols + ')
+) AS PivotTable';
 
-              -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
-              SET @query = '
-              SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
-                   FROM (' + @query + ') AS FinalResult 
-                   ORDER BY Total_Manifestacoes DESC';
+-- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+SET @query = '
+SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+FROM (' + @query + ') AS FinalResult 
+ORDER BY Total_Manifestacoes DESC';
 
-              -- Executar a consulta dinâmica
-              EXEC sp_executesql @query;
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query;
+
           '''
 
         # Executando a query e pegando o resultado
@@ -1062,52 +1141,61 @@ ORDER BY Total DESC;'''.format(escopo)
         # Query dinâmica
         query = f'''
                 DECLARE @cols AS NVARCHAR(MAX),
-                        @sumCols AS NVARCHAR(MAX),
-                        @query AS NVARCHAR(MAX);
+        @sumCols AS NVARCHAR(MAX),
+        @query AS NVARCHAR(MAX);
 
-                -- Obter a lista de SubCategoria_Nivel2 distintas
-                SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
-                WITHIN GROUP (ORDER BY Marca_Maena)
-                FROM (SELECT DISTINCT Marca_Maena
-                      FROM Escopo_{escopo}
-                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+-- Obter a lista de Marca_Maena distintas
+SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
+WITHIN GROUP (ORDER BY Marca_Maena)
+FROM (SELECT DISTINCT Marca_Maena
+      FROM Escopo_{escopo}
+      WHERE Marca_Maena IS NOT NULL) AS tmp;
 
-                -- Construir a lista de colunas para a soma total de manifestações
-                SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
-                FROM (SELECT DISTINCT Marca_Maena
-                      FROM Escopo_{escopo}
-                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+-- Construir a lista de colunas para a soma total de manifestações
+SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
+FROM (SELECT DISTINCT Marca_Maena
+      FROM Escopo_{escopo}
+      WHERE Marca_Maena IS NOT NULL) AS tmp;
 
-                -- Construir a consulta dinâmica PIVOT
-                SET @query = '
-                SELECT Ocorrencia, ' + @cols + '
-                FROM (
-                    SELECT 
-                        Ocorrencia,
-                        Marca_Maena,
-                        COUNT(*) AS Total_Manifestacoes
-                    FROM 
-                        Escopo_{escopo}
-                    WHERE 
-                        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
-                        AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
-                    GROUP BY 
-                        Ocorrencia,
-                        Marca_Maena
-                ) AS SourceTable
-                PIVOT (
-                    SUM(Total_Manifestacoes)
-                    FOR Marca_Maena IN (' + @cols + ')
-                ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT Ocorrencia, ' + @cols + '
+FROM (
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END AS Ocorrencia,
+        Marca_Maena,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+        AND CONVERT(date, Mes_ano) BETWEEN ''{data_inicio_str}'' AND ''{data_fim_str}''
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END,
+        Marca_Maena
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR Marca_Maena IN (' + @cols + ')
+) AS PivotTable';
 
-                -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
-                SET @query = '
-                SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
-                     FROM (' + @query + ') AS FinalResult 
-                     ORDER BY Total_Manifestacoes DESC';
+-- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+SET @query = '
+SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+FROM (' + @query + ') AS FinalResult 
+ORDER BY Total_Manifestacoes DESC';
 
-                -- Executar a consulta dinâmica
-                EXEC sp_executesql @query;
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query;
+
             '''
 
         # Executando a query e pegando o resultado
@@ -1137,53 +1225,62 @@ ORDER BY Total DESC;'''.format(escopo)
 
         # Query dinâmica
         query = f'''
-                DECLARE @cols AS NVARCHAR(MAX),
-                        @sumCols AS NVARCHAR(MAX),
-                        @query AS NVARCHAR(MAX);
+               DECLARE @cols AS NVARCHAR(MAX),
+        @sumCols AS NVARCHAR(MAX),
+        @query AS NVARCHAR(MAX);
 
-                -- Obter a lista de SubCategoria_Nivel2 distintas
-                SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
-                WITHIN GROUP (ORDER BY Marca_Maena)
-                FROM (SELECT DISTINCT Marca_Maena
-                      FROM Escopo_{escopo}
-                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+-- Obter a lista de Marca_Maena distintas
+SELECT @cols = STRING_AGG(QUOTENAME(Marca_Maena), ', ')
+WITHIN GROUP (ORDER BY Marca_Maena)
+FROM (SELECT DISTINCT Marca_Maena
+      FROM Escopo_{escopo}
+      WHERE Marca_Maena IS NOT NULL) AS tmp;
 
-                -- Construir a lista de colunas para a soma total de manifestações
-                SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
-                FROM (SELECT DISTINCT Marca_Maena
-                      FROM Escopo_{escopo}
-                      WHERE Marca_Maena IS NOT NULL) AS tmp;
+-- Construir a lista de colunas para a soma total de manifestações
+SELECT @sumCols = STRING_AGG('ISNULL(' + QUOTENAME(Marca_Maena) + ', 0)', ' + ')
+FROM (SELECT DISTINCT Marca_Maena
+      FROM Escopo_{escopo}
+      WHERE Marca_Maena IS NOT NULL) AS tmp;
 
-                -- Construir a consulta dinâmica PIVOT
-                SET @query = '
-                SELECT Ocorrencia, ' + @cols + '
-                FROM (
-                    SELECT 
-                        Ocorrencia,
-                        Marca_Maena,
-                        COUNT(*) AS Total_Manifestacoes
-                    FROM 
-                        Escopo_{escopo}
-                    WHERE 
-                        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
-                        AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
-                    GROUP BY 
-                        Ocorrencia,
-                        Marca_Maena
-                ) AS SourceTable
-                PIVOT (
-                    SUM(Total_Manifestacoes)
-                    FOR Marca_Maena IN (' + @cols + ')
-                ) AS PivotTable';
+-- Construir a consulta dinâmica PIVOT
+SET @query = '
+SELECT Ocorrencia, ' + @cols + '
+FROM (
+    SELECT 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END AS Ocorrencia,
+        Marca_Maena,
+        COUNT(*) AS Total_Manifestacoes
+    FROM 
+        Escopo_{escopo}
+    WHERE 
+        Tipo_De_Ocorrencia = ''RECLAMAÇÃO''
+        AND CONVERT(date, Mes_ano) = ''{data_fim_str}''
+    GROUP BY 
+        CASE 
+            WHEN grupo_de_tipo_de_ocorrencia = ''INFESTAÇÃO'' THEN ''Infestação''
+            WHEN grupo_de_tipo_de_ocorrencia = ''SABOR/ODOR ALTERADO'' THEN ''Sabor/Odor Alterado''
+            ELSE ocorrencia
+        END,
+        Marca_Maena
+) AS SourceTable
+PIVOT (
+    SUM(Total_Manifestacoes)
+    FOR Marca_Maena IN (' + @cols + ')
+) AS PivotTable';
 
-                -- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
-                SET @query = '
-                SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
-                     FROM (' + @query + ') AS FinalResult 
-                     ORDER BY Total_Manifestacoes DESC';
+-- Adicionar a substituição de NULL por 0 e cálculo do total de manifestações
+SET @query = '
+SELECT Ocorrencia, ' + @cols + ', (' + @sumCols + ') AS Total_Manifestacoes
+FROM (' + @query + ') AS FinalResult 
+ORDER BY Total_Manifestacoes DESC';
 
-                -- Executar a consulta dinâmica
-                EXEC sp_executesql @query;
+-- Executar a consulta dinâmica
+EXEC sp_executesql @query;
+
             '''
 
         # Executando a query e pegando o resultado
