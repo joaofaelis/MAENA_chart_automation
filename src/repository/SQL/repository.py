@@ -1022,6 +1022,10 @@ EXEC sp_executesql @query; '''
 
         # Executando a query e pegando o resultado
         database_cursor.execute(query)
+        if database_cursor.description is None:
+            print("A query não retornou nenhum resultado.")
+            return pd.DataFrame()  # Retorna um DataFrame vazio ou faça outro tratamento apropriado
+
         rows = database_cursor.fetchall()
         columns = [column[0] for column in database_cursor.description]
 
@@ -1108,6 +1112,11 @@ EXEC sp_executesql @query;
 
         # Executando a query e pegando o resultado
         database_cursor.execute(query)
+        if database_cursor.description is None:
+            print("A query não retornou nenhum resultado.")
+            return pd.DataFrame()  # Retorna um DataFrame vazio ou faça outro tratamento apropriado
+
+
         rows = database_cursor.fetchall()
         columns = [column[0] for column in database_cursor.description]
 
