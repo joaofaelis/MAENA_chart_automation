@@ -347,10 +347,6 @@ def run_code():
     df_marca_maena_last_date = SQLRepository.tabela_marca_maena_last_date(escopo, data_fim)
 
 
-
-
-
-
     desktop_path = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
     if not os.path.exists(desktop_path):  # Caso o usuário não esteja no Windows
         desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop')

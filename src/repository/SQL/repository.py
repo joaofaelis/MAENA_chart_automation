@@ -1307,7 +1307,3 @@ EXEC sp_executesql @query;
         infra_sql.close_connection()
 
         return df
-
-
-
-
