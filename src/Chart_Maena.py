@@ -341,8 +341,17 @@ def run_code():
     # Se você deseja resetar o índice após a exclusão das linhas
     df_top_10_all_last.reset_index(drop=True, inplace=True)
 
-    df_subcategoria_2 = SQLRepository.tabela_subcategoria_nvl2(escopo, data_inicio, data_fim)
-    df_subcategoria_2_last_date = SQLRepository.tabela_subcategoria_nvl2_last_date(escopo, data_fim)
+    try:
+        df_subcategoria_2 = SQLRepository.tabela_subcategoria_nvl2(escopo, data_inicio, data_fim)
+    except Exception as e:
+        print(f"Erro ao gerar df_subcategoria_2: {e}")
+        df_subcategoria_2 = pd.DataFrame()  # cria um dataframe vazio para não quebrar depois
+
+    try:
+        df_subcategoria_2_last_date = SQLRepository.tabela_subcategoria_nvl2_last_date(escopo, data_fim)
+    except Exception as e:
+        print(f"Erro ao gerar df_subcategoria_2_last_date: {e}")
+        df_subcategoria_2_last_date = pd.DataFrame()
     df_marca_maena = SQLRepository.tabela_marca_maena(escopo, data_inicio, data_fim)
     df_marca_maena_last_date = SQLRepository.tabela_marca_maena_last_date(escopo, data_fim)
 
