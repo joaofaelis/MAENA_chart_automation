@@ -7,10 +7,7 @@ import xlsxwriter
 import pandas as pd
 import locale
 from datetime import datetime
-
-
 locale.setlocale(locale.LC_TIME, 'pt_BR.utf8')
-
 
 def run_code():
     escopo = entry_escopo.get()
@@ -193,49 +190,55 @@ def run_code():
     # Se você deseja resetar o índice após a exclusão das linhas
     df_acumulate_line_date_final.reset_index(drop=True, inplace=True)
 
-
     df_except_reclamacao = SQLRepository.chart_columns_line_except_reclamacao(escopo, data_inicio, data_fim)
     df_except_reclamacao['Tipo_de_ocorrencia'] = df_except_reclamacao['Tipo_de_ocorrencia'].str.title()
-    total_except_reclamacao = int(df_except_reclamacao['Total'].sum())
-    # Ordenar o DataFrame pela coluna 'Total' em ordem decrescente
-    df_except_reclamacao = df_except_reclamacao.sort_values(by='Total', ascending=False)
-    # Separar a categoria "Manifestações Em Menor Volume"
+    # Separar "Redes Sociais - Outros"
+    redes_outros = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] == 'Redes Sociais - Outros']
+    quantidade_redes_outros = redes_outros['Total'].sum()
+    df_except_reclamacao = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] != 'Redes Sociais - Outros']
+    # Separar "Manifestações Em Menor Volume" e deixar no final
     menor_volume = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
     resto = df_except_reclamacao[df_except_reclamacao['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
-    # Concatenar as partes, garantindo que "Manifestações Em Menor Volume" fique no final
-    df_except_reclamacao = pd.concat([resto, menor_volume])
-    # Calcular a coluna '% Acumulado'
-    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['Total'] / total_except_reclamacao
-    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['% Acumulado'].cumsum()
-    df_except_reclamacao.replace('#NÚM!', np.nan, inplace=True)
-    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    # Reorganizar dataframe e calcular % acumulado
+    df_except_reclamacao = pd.concat([resto, menor_volume], ignore_index=True)
     df_except_reclamacao['Total'] = pd.to_numeric(df_except_reclamacao['Total'], errors='coerce')
+    total_sem_outros = df_except_reclamacao['Total'].sum()
+    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['Total'] / total_sem_outros
+    df_except_reclamacao['% Acumulado'] = df_except_reclamacao['% Acumulado'].cumsum()
+    # Adiciona linha em branco + "Redes Sociais - Outros"
+    linha_em_branco = pd.DataFrame([['', '', '']], columns=df_except_reclamacao.columns)
+    df_except_reclamacao = pd.concat([df_except_reclamacao, linha_em_branco, redes_outros], ignore_index=True)
+    df_except_reclamacao.replace('#NÚM!', np.nan, inplace=True)
     df_except_reclamacao['% Acumulado'] = pd.to_numeric(df_except_reclamacao['% Acumulado'], errors='coerce')
-    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
-    df_except_reclamacao = df_except_reclamacao.dropna(subset=['Total', '% Acumulado'])
-    # Se você deseja resetar o índice após a exclusão das linhas
+    df_except_reclamacao = df_except_reclamacao.dropna(subset=['Total'])
     df_except_reclamacao.reset_index(drop=True, inplace=True)
+    df_except_reclamacao['Total'] = pd.to_numeric(df_except_reclamacao['Total'], errors='coerce').fillna(0).astype(int)
+    df_except_reclamacao['% Acumulado'] = pd.to_numeric(df_except_reclamacao['% Acumulado'], errors='coerce').fillna(0)
+    df_except_reclamacao['Tipo_de_ocorrencia'] = df_except_reclamacao['Tipo_de_ocorrencia'].fillna('')
 
 
     df_except_reclamacao_last_date = SQLRepository.chart_columns_line_except_reclamacao_last_date(escopo, data_fim)
     df_except_reclamacao_last_date['Tipo_de_ocorrencia'] = df_except_reclamacao_last_date['Tipo_de_ocorrencia'].str.title()
-    total_except_reclamacao_last_date = int(df_except_reclamacao_last_date['Total'].sum())
-    df_except_reclamacao_last_date = df_except_reclamacao_last_date.sort_values(by='Total', ascending=False)
-    # Separar a categoria "Manifestações Em Menor Volume"
+    redes_outros_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] == 'Redes Sociais - Outros']
+    quantidade_redes_outros_last_date = redes_outros_last_date['Total'].sum()
+    df_except_reclamacao_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] != 'Redes Sociais - Outros']
     menor_volume_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] == 'Manifestações Em Menor Volume']
     resto_last_date = df_except_reclamacao_last_date[df_except_reclamacao_last_date['Tipo_de_ocorrencia'] != 'Manifestações Em Menor Volume']
-    # Concatenar as partes, garantindo que "Manifestações Em Menor Volume" fique no final
-    df_except_reclamacao_last_date = pd.concat([resto_last_date, menor_volume_last_date])
-    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['Total'] / total_except_reclamacao_last_date
-    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['% Acumulado'].cumsum()
-    df_except_reclamacao_last_date.replace('#NÚM!', np.nan, inplace=True)
-    # Converter as colunas relevantes para tipo numérico, forçando erros a NaN
+    df_except_reclamacao_last_date = pd.concat([resto_last_date, menor_volume_last_date], ignore_index=True)
     df_except_reclamacao_last_date['Total'] = pd.to_numeric(df_except_reclamacao_last_date['Total'], errors='coerce')
+    total_sem_outros_last_date = df_except_reclamacao_last_date['Total'].sum()
+    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['Total'] / total_sem_outros_last_date
+    df_except_reclamacao_last_date['% Acumulado'] = df_except_reclamacao_last_date['% Acumulado'].cumsum()
+    linha_em_branco_last_date = pd.DataFrame([['', '', '']], columns=df_except_reclamacao_last_date.columns)
+    df_except_reclamacao_last_date = pd.concat([df_except_reclamacao_last_date, linha_em_branco_last_date, redes_outros_last_date], ignore_index=True)
+    df_except_reclamacao_last_date.replace('#NÚM!', np.nan, inplace=True)
     df_except_reclamacao_last_date['% Acumulado'] = pd.to_numeric(df_except_reclamacao_last_date['% Acumulado'], errors='coerce')
-    # Filtrar as linhas onde 'Total' ou '% Acumulado' não são NaN
-    df_except_reclamacao_last_date = df_except_reclamacao_last_date.dropna(subset=['Total', '% Acumulado'])
-    # Se você deseja resetar o índice após a exclusão das linhas
+    df_except_reclamacao_last_date = df_except_reclamacao_last_date.dropna(subset=['Total'])
     df_except_reclamacao_last_date.reset_index(drop=True, inplace=True)
+    df_except_reclamacao_last_date['Total'] = pd.to_numeric(df_except_reclamacao_last_date['Total'], errors='coerce').fillna(0).astype(int)
+    df_except_reclamacao_last_date['% Acumulado'] = pd.to_numeric(df_except_reclamacao_last_date['% Acumulado'], errors='coerce').fillna(0)
+    df_except_reclamacao_last_date['Tipo_de_ocorrencia'] = df_except_reclamacao_last_date['Tipo_de_ocorrencia'].fillna('')
+
 
 
     df_line_and_variant = SQLRepository.chart_columns_line_and_variant(escopo, data_inicio, data_fim)
@@ -638,19 +641,25 @@ def run_code():
 
             # Criando lista de cores para cada ponto
             cores_pontos = []
+            categorias = [cat for cat in categorias if pd.notna(cat)]
             for categoria_completa in categorias:
                 categoria = categoria_completa.split(' - ')[0]
                 cor = cores.get(categoria, '#4F4F4F')  # Define a cor com base na categoria
                 cores_pontos.append({'fill': {'color': cor}})
 
             # Adicionar a série com valores e cores
+            ultima_linha = len(df_except_reclamacao)
+
             chart.add_series({
                 'name': 'Manifestações',
-                'categories': [sheet_name, 1, 0, len(categorias), 0],
-                'values': [sheet_name, 1, 1, len(categorias), 1],
-                'points': cores_pontos,
+                'categories': [sheet_name, 1, 0, ultima_linha, 0],
+                'values': [sheet_name, 1, 1, ultima_linha, 1],
+                'points': cores_pontos[:ultima_linha],
                 'fill': {'color': '#4F4F4F'},
-                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
+                'data_labels': {
+                    'value': True,
+                    'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}
+                },
                 'gap': 50
             })
 
@@ -658,7 +667,7 @@ def run_code():
             # Definir valor máximo do eixo Y para o gráfico de colunas
             chart.set_y_axis({
                 'min': 0,
-                'max': total_except_reclamacao,
+                'max': total_sem_outros,
                 'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
                 'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
                 'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
@@ -668,7 +677,7 @@ def run_code():
 
             chart_sheet.set_chart(chart)
             chart.set_title({
-                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_except_reclamacao} manifestações - {data_inicio_formatada} - {data_fim_formatada}',
+                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_sem_outros} manifestações + {quantidade_redes_outros} Outros - {data_inicio_formatada} - {data_fim_formatada}',
                 'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}
             })
             chart.set_legend({'position': 'bottom',
@@ -719,25 +728,42 @@ def run_code():
 
             # Criando lista de cores para cada ponto
             cores_pontos = []
+            categorias = [cat for cat in categorias if pd.notna(cat)]
             for categoria_completa in categorias:
                 categoria = categoria_completa.split(' - ')[0]
                 cor = cores.get(categoria, '#4F4F4F')  # Define a cor com base na categoria
                 cores_pontos.append({'fill': {'color': cor}})
 
             # Adicionar a série com valores e cores
+            ultima_linha = len(df_except_reclamacao_last_date)
+
             chart.add_series({
                 'name': 'Manifestações',
-                'categories': [sheet_name, 1, 0, len(categorias), 0],
-                'values': [sheet_name, 1, 1, len(categorias), 1],
-                'points': cores_pontos,
-                'data_labels': {'value': True, 'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}},
-                'gap': 50,
+                'categories': [sheet_name, 1, 0, ultima_linha, 0],
+                'values': [sheet_name, 1, 1, ultima_linha, 1],
+                'points': cores_pontos[:ultima_linha],
                 'fill': {'color': '#4F4F4F'},
+                'data_labels': {
+                    'value': True,
+                    'font': {'name': 'Segoe UI', 'size': 14, 'color': '#404040'}
+                },
+                'gap': 50
+            })
+
+            # Definir valor máximo do eixo Y para o gráfico de colunas
+            chart.set_y_axis({
+                'min': 0,
+                'max': total_sem_outros_last_date,
+                'major_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': '#FFFFFF'}},
+                'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': '#FFFFFF'},
+                'num_font': {'color': 'white'},
+                'line': {'none': True}
             })
 
             chart_sheet.set_chart(chart)
             chart.set_title({
-                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_except_reclamacao_last_date} manifestações - {data_fim_formatada}',
+                'name': f'{titulo_grafico} \n10 principais manifestações (exceto reclamações) \n{total_sem_outros_last_date} manifestações + {quantidade_redes_outros_last_date} Outros - {data_fim_formatada}',
                 'name_font': {'name': 'Segoe UI', 'size': 18, 'bold': False, 'color': '#404040'}
             })
             chart.set_legend({'position': 'bottom',
@@ -751,7 +777,7 @@ def run_code():
 
             chart.set_y_axis({
                     'min': 0,
-                    'max': total_except_reclamacao_last_date,
+                    'max': total_sem_outros_last_date,
                     'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
                     'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
                     'font': {'name': 'Segoe UI', 'size': 12, 'bold': False, 'italic': False, 'color': 'white'},
@@ -759,26 +785,24 @@ def run_code():
                     'line': {'none': True}
                 })
 
-
             line_chart = workbook.add_chart({'type': 'line'})
             line_chart.add_series({
                 'name': '% Acumulado',
-                'categories': [sheet_name, 1, 0, len(categorias), 0],
-                # Ajuste para o mesmo intervalo de categorias do gráfico de colunas
-                'values': [sheet_name, 1, 2, len(categorias), 2],
-                # Ajuste para os mesmos valores e colunas correspondentes
+                'categories': [sheet_name, 1, 0, df_except_reclamacao_last_date.shape[0], 0],
+                'values': [sheet_name, 1, 2, df_except_reclamacao_last_date.shape[0], 2],
                 'line': {'color': '#404040', 'width': 1.25},
                 'y2_axis': True,
             })
             line_chart.set_y2_axis({
-                'major_gridlines': {'visible': False},
-                'minor_gridlines': {'visible': False},
+                'major_gridlines': {'visible': False, 'line': {'color': 'white'}},
+                'minor_gridlines': {'visible': False, 'line': {'color': 'white'}},
                 'num_format': '0%',
                 'max': 1,
                 'font': {'name': 'Segoe UI', 'size': 14, 'bold': False, 'italic': False, 'color': '#404040'},
                 'line': {'none': True}
             })
             chart.set_plotarea({'border': {'none': True, 'color': '#D9D9D9'}, 'fill': {'none': True}})
+
             # Combinar os gráficos de colunas e linha
             chart.combine(line_chart)
 
@@ -1247,12 +1271,6 @@ def run_code():
             chart.combine(line_chart)
 
             chart_sheet.set_chart(chart)
-
-
-
-
-
-
 
     workbook.close()
 

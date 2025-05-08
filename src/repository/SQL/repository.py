@@ -463,7 +463,7 @@ Top10 AS (
         0 AS sort_order
     FROM CTE
     ORDER BY quantidade DESC
-    OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+    OFFSET 0 ROWS FETCH NEXT 11 ROWS ONLY
 ),
 Remaining AS (
     SELECT 
